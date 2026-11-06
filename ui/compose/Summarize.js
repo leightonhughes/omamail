@@ -8,10 +8,15 @@
 function entry(summary, text) {
   var message = summary || ({})
   var from = message.from || ({})
+  // The reader hydrates `date` into a Date (MailAccount.hydrateSummary), whose
+  // string form is not RFC 3339; summarize.rs dates and orders by RFC 3339.
+  var at = Number(message.dateMs)
+  if (!(at > 0) && message.date && typeof message.date.getTime === "function") at = message.date.getTime()
+  if (!(at > 0) && message.date) at = Date.parse(String(message.date))
   return {
     name: String(from.name || from.display || ""),
     email: String(from.email || ""),
-    date: String(message.date || ""),
+    date: at > 0 ? new Date(at).toISOString() : "",
     when: String(message.fullTime || ""),
     body: String(text || "")
   }

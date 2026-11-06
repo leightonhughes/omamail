@@ -7,6 +7,10 @@ const kate = { from: { name: "Kate Smith", email: "kate@x.org", display: "Kate S
   date: "2010-01-14T22:20:00.000Z", fullTime: "Jan 15, 2010 09:20" }
 deepEqual(summarize.entry(kate, "Maple?"),
   { name: "Kate Smith", email: "kate@x.org", date: "2010-01-14T22:20:00.000Z", when: "Jan 15, 2010 09:20", body: "Maple?" })
+// The reader's summaries carry a Date (and dateMs), not the wire string.
+assert.strictEqual(summarize.entry({ date: new Date("2026-11-06T04:47:51Z") }, "").date, "2026-11-06T04:47:51.000Z")
+assert.strictEqual(summarize.entry({ dateMs: 1263507600000, date: new Date(0) }, "").date, "2010-01-14T22:20:00.000Z")
+assert.strictEqual(summarize.entry({}, "").date, "")
 // A sender with no name falls back to what the list shows.
 assert.strictEqual(summarize.entry({ from: { email: "a@x.org", display: "a" } }, "").name, "a")
 

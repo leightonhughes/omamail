@@ -8,6 +8,7 @@ async fn resource_methods_validate_before_credentials() {
         "gmail.labelCounts",
         "gmail.profile",
         "gmail.sendAs",
+        "gmail.thread",
     ] {
         assert_eq!(
             session
@@ -22,6 +23,12 @@ async fn resource_methods_validate_before_credentials() {
     assert_eq!(
         session
             .call("gmail.labelCounts", &json!({"accountId":"a@example.org"}))
+            .await,
+        Err("invalid_params")
+    );
+    assert_eq!(
+        session
+            .call("gmail.thread", &json!({"accountId":"a@example.org"}))
             .await,
         Err("invalid_params")
     );

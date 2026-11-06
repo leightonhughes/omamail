@@ -53,6 +53,9 @@ pub(super) fn normalize(method: &str, answer: Value) -> Value {
             if email.is_empty() || (!primary && text(&entry["verificationStatus"]).eq_ignore_ascii_case("pending")) {return None;}
             Some(json!({"email":email,"displayName":text(&entry["displayName"]).trim(),"isPrimary":primary,"isDefault":entry["isDefault"]==true}))
         }).collect()),
+        // A conversation's message ids, oldest first, for a Summarize reply.
+        "gmail.thread" => json!({"id":text(&answer["id"]),"messageIds":answer["messages"].as_array().into_iter().flatten()
+            .map(|m| text(&m["id"])).filter(|id| !id.is_empty()).collect::<Vec<_>>()}),
         _ => answer,
     }
 }
@@ -61,6 +64,17 @@ pub(super) fn normalize(method: &str, answer: Value) -> Value {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_thread_answers_its_message_ids_in_order() {
+        assert_eq!(
+            normalize(
+                "gmail.thread",
+                json!({"id":"t","messages":[{"id":"a","threadId":"t"},{"id":""},{"id":"c"}]})
+            ),
+            json!({"id":"t","messageIds":["a","c"]})
+        );
+    }
 
     #[test]
     fn labels_keep_display_names_raw_names_and_nonnegative_counts() {

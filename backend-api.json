@@ -129,6 +129,7 @@
     "gmail.list",
     "gmail.read",
     "gmail.attachment",
+    "gmail.thread",
     "gmail.invalidate",
     "gmail.labels",
     "gmail.labelCounts",
@@ -1617,7 +1618,8 @@
   "unreleased": {
     "methods": [
       "calendar.verify",
-      "contacts.google"
+      "contacts.google",
+      "gmail.thread"
     ],
     "cases": [
       "Calendar validation errors preserve safe context",

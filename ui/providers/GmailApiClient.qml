@@ -285,6 +285,15 @@ Item {
 
   }
 
+  // The ids of a conversation's messages, oldest first: Gmail rows carry no
+  // conversation block, so a Summarize reply asks for its members here.
+  function getThreadMemberIds(threadId, callback) {
+    return backendRequest("gmail.thread", { id: String(threadId || "") }, function(result, error) {
+      if (typeof callback === "function")
+        callback(!error && result && Array.isArray(result.messageIds) ? result.messageIds : [], error)
+    })
+  }
+
   function getLabelCounts(labelId, callback) {
     return backendRequest("gmail.labelCounts", { id: String(labelId || "") }, callback)
 

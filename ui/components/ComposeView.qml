@@ -344,13 +344,22 @@ DropArea {
     summarizeSource = Summarize.source([open])
     var reading = service.reading
     var projection = service.conversationProjection || ({})
-    var ids = Summarize.memberIds(projection.memberIds, replySummary.id, 20)
-    if (!reading || typeof reading.threadMessages !== "function" || ids.length === 0) return
-    reading.threadMessages(ids, function(entries) {
-      if (serial !== root.summarizeSerial || !root.opened) return
-      root.summarizeSource = Summarize.source([open].concat(entries))
-      if (!root.bodyWasEdited && bodyEdit.text === root.placedBody) root.placeBody()
-    })
+    if (!reading || typeof reading.threadMessages !== "function") return
+    function readMembers(memberIds) {
+      var ids = Summarize.memberIds(memberIds, replySummary.id, 20)
+      if (serial !== root.summarizeSerial || ids.length === 0) return
+      reading.threadMessages(ids, function(entries) {
+        if (serial !== root.summarizeSerial || !root.opened) return
+        root.summarizeSource = Summarize.source([open].concat(entries))
+        if (!root.bodyWasEdited && bodyEdit.text === root.placedBody) root.placeBody()
+      })
+    }
+    // JMAP rows carry their conversation; Gmail's do not, so ask for it.
+    var members = Array.isArray(projection.memberIds) ? projection.memberIds : []
+    var api = reading.api
+    if (members.length > 1 || !replySummary.threadId || !api || typeof api.getThreadMemberIds !== "function")
+      readMembers(members)
+    else api.getThreadMemberIds(String(replySummary.threadId), readMembers)
   }
 
   function setSummarize(on) {

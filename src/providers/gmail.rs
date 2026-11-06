@@ -256,7 +256,7 @@ fn quota_cost(method: &str) -> u32 {
         "gmail.labels" | "gmail.labelCounts" | "gmail.profile" => 1,
         "gmail.batchModify" => 50,
         "gmail.send" => 100,
-        "gmail.saveDraft" | "gmail.deleteDraft" => 10,
+        "gmail.saveDraft" | "gmail.deleteDraft" | "gmail.thread" => 10,
         "gmail.updateDraft" => 15,
         _ => 5,
     }
@@ -418,6 +418,7 @@ impl Session {
             "gmail.labelCounts" => &["accountId", "id"],
             "gmail.list" => &["accountId", "query", "pageSize", "pageToken"],
             "gmail.read" => &["accountId", "id", "full"],
+            "gmail.thread" => &["accountId", "id"],
             "gmail.attachment" => &["accountId", "messageId", "attachmentId"],
             _ => return Err("unknown_method"),
         };
@@ -483,6 +484,10 @@ impl Session {
                     }
                 }
                 vec!["messages", field(params, "id", true)?]
+            }
+            "gmail.thread" => {
+                query.push(("format".into(), "minimal".into()));
+                vec!["threads", field(params, "id", true)?]
             }
             _ => vec![
                 "messages",

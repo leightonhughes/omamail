@@ -126,6 +126,7 @@ pub const ALL: &[&str] = &[
     "gmail.list",
     "gmail.read",
     "gmail.attachment",
+    "gmail.thread",
     "gmail.invalidate",
     "gmail.labels",
     "gmail.labelCounts",
