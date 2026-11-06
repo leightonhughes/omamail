@@ -105,6 +105,18 @@ Column {
       service.setAccountSenderName(selectedNameAccountId, senderNameEdit.text)
   }
 
+  // Both names, before the page goes or another mailbox takes the fields: a
+  // name typed and left without Enter or a click elsewhere is still kept.
+  function saveNames() {
+    senderNameTimer.stop()
+    saveName()
+    saveSenderName()
+  }
+  Component.onDestruction: saveNames()
+
+  // "Your name" is also kept a moment after typing pauses, once per pause.
+  Timer { id: senderNameTimer; interval: 600; onTriggered: root.saveSenderName() }
+
   function showNameAccount(next) {
     selectedNameAccountId = next ? String(next.id || "") : ""
     nameEdit.text = next ? String(next.label || "") : ""
@@ -114,8 +126,7 @@ Column {
   function selectNameAccount(id) {
     var next = signatureAccount(id)
     if (!next || String(next.id || "") === selectedNameAccountId) return
-    saveName()
-    saveSenderName()
+    saveNames()
     showNameAccount(next)
   }
 
@@ -272,7 +283,10 @@ Column {
       service.refreshDefaultMailClient()
   }
   onServiceChanged: refreshDefaultMailClient()
-  onVisibleChanged: refreshDefaultMailClient()
+  onVisibleChanged: {
+    if (!visible) saveNames()
+    refreshDefaultMailClient()
+  }
   Component.onCompleted: {
     refreshDefaultMailClient()
     renderSignaturePreview()
@@ -1236,7 +1250,7 @@ Column {
     Text {
       width: parent.width
       visible: root.senderNameEditable
-      text: "Your name"
+      text: "Your name (shown in From)"
       color: root.textColor
       font.family: root.panelFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -1253,6 +1267,7 @@ Column {
       font.pixelSize: Style.font.bodySmall
 
       onActiveFocusChanged: if (!activeFocus) root.saveSenderName()
+      onTextChanged: if (senderNameEdit.activeFocus) senderNameTimer.restart()
       onAccepted: root.saveSenderName()
     }
 

@@ -104,6 +104,17 @@ Item {
       return null
     }
 
+    function findChildText(item, wanted) {
+      if (!item) return null
+      if (item.text === wanted) return item
+      var kids = item.children || []
+      for (var i = 0; i < kids.length; i++) {
+        var hit = findChildText(kids[i], wanted)
+        if (hit) return hit
+      }
+      return null
+    }
+
     function nameField() {
       return find("settings-name-editor")
     }
@@ -232,6 +243,52 @@ Item {
       compare(fakeService.senderNameWrites, 1)
       compare(fakeService.senderNamedId, "a@example.org")
       compare(fakeService.senderNamedText, "jo")
+    }
+
+    // A pause in typing keeps the name, so closing the window straight after
+    // typing it does not lose it.
+    function test_a_pause_in_typing_saves_the_sender_name() {
+      var field = senderField()
+      mouseClick(field, field.width / 2, field.height / 2)
+      keyClick(Qt.Key_J)
+      keyClick(Qt.Key_O)
+      compare(fakeService.senderNameWrites, 0)
+      tryCompare(fakeService, "senderNameWrites", 1, 2000)
+      compare(fakeService.senderNamedText, "jo")
+      wait(800)
+      compare(fakeService.senderNameWrites, 1, "once per pause, not per keystroke")
+    }
+
+    // Closing Settings with the cursor still in a field saves both names.
+    function test_closing_settings_saves_what_was_typed() {
+      var name = nameField()
+      mouseClick(name, name.width / 2, name.height / 2)
+      keyClick(Qt.Key_X)
+      var field = senderField()
+      mouseClick(field, field.width / 2, field.height / 2)
+      keyClick(Qt.Key_Z)
+      compare(fakeService.nameWrites, 1, "leaving the mailbox name saved it")
+      page.visible = false
+      compare(fakeService.senderNameWrites, 1)
+      compare(fakeService.senderNamedText, "z")
+      wait(800)
+      compare(fakeService.senderNameWrites, 1, "the pending pause save was dropped")
+      page.visible = true
+    }
+
+    // Closing with the cursor in Mailbox name saves it too.
+    function test_closing_settings_saves_the_mailbox_name() {
+      var name = nameField()
+      mouseClick(name, name.width / 2, name.height / 2)
+      keyClick(Qt.Key_Y)
+      page.visible = false
+      compare(fakeService.namedText, "y")
+      page.visible = true
+    }
+
+    // The caption says where the name shows.
+    function test_the_sender_name_caption_names_the_from_line() {
+      verify(findChildText(page, "Your name (shown in From)"))
     }
 
     // Leaving for another mailbox saves the name for the one it was typed for.
