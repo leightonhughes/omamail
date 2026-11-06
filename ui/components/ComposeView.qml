@@ -349,11 +349,11 @@ DropArea {
     summarizeSource = Summarize.source([open])
     var reading = service.reading
     var projection = service.conversationProjection || ({})
-    if (!reading || typeof reading.threadMessages !== "function") return
+    if (!reading || typeof reading.preparedRead !== "function") return
     function readMembers(memberIds) {
       var ids = Summarize.memberIds(memberIds, replySummary.id, 20)
       if (serial !== root.summarizeSerial || ids.length === 0) return
-      reading.threadMessages(ids, function(entries) {
+      root.threadMessages(reading, ids, function(entries) {
         if (serial !== root.summarizeSerial || !root.opened) return
         root.summarizeSource = Summarize.source([open].concat(entries))
         root.requote()
@@ -365,6 +365,26 @@ DropArea {
     if (members.length > 1 || !replySummary.threadId || !api || typeof api.getThreadMemberIds !== "function")
       readMembers(members)
     else api.getThreadMemberIds(String(replySummary.threadId), readMembers)
+  }
+
+  // The readable text of each message named, read through the mailbox's own
+  // reader (cache first). A message that cannot be read is left out rather
+  // than holding the reply up; the one being answered is always there already.
+  function threadMessages(reading, ids, callback) {
+    var arrived = []
+    var left = ids.length
+    ids.forEach(function(id) {
+      var done = false
+      reading.preparedRead(String(id), function(payload, error) {
+        if (done) return
+        done = true
+        if (!error && payload && payload.nativeContent) {
+          var body = payload.nativeContent.body || ({})
+          arrived.push(Summarize.entry(payload.nativeSummary, body.text))
+        }
+        if (--left === 0) callback(arrived)
+      })
+    })
   }
 
   // The thread often finishes reading after the reply was placed, or typed

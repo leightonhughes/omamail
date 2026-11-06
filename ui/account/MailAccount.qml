@@ -17,7 +17,6 @@ import "../providers/Registry.js" as Provider
 import "../providers/ImapProtocol.js" as Imap
 import "../providers/OAuth.js" as OAuth
 import "../backend/Plain.js" as Plain
-import "../compose/Summarize.js" as Summarize
 
 // One mailbox: its sign-in, its cache, its messages. Service.qml owns a set of
 // these and puts whichever is on screen in front of the views.
@@ -824,28 +823,6 @@ Item {
     if (!backend) { callback(null, "Mail backend is unavailable", false); return handle }
     read(true)
     return handle
-  }
-
-  // The readable text of each message named, for a Summarize reply, read from
-  // the cache when it can be. A message that cannot be read is left out rather
-  // than holding the reply up; the one being answered is always there already.
-  function threadMessages(ids, callback) {
-    var wanted = Array.isArray(ids) ? ids.slice() : []
-    var arrived = []
-    var left = wanted.length
-    if (left === 0) { callback([]); return }
-    wanted.forEach(function(id) {
-      var done = false
-      preparedRead(String(id), function(payload, error) {
-        if (done) return
-        done = true
-        if (!error && payload && payload.nativeContent) {
-          var body = payload.nativeContent.body || ({})
-          arrived.push(Summarize.entry(payload.nativeSummary, body.text))
-        }
-        if (--left === 0) callback(arrived)
-      })
-    })
   }
 
   function preferredSendAs(recipients) {
@@ -2324,7 +2301,6 @@ Item {
       replyTo: String(values.replyTo || "").trim(),
       signature: String(values.signature || ""),
       signatureHtml: String(values.signatureHtml || ""),
-      // A Summarize reply's messages, for the HTML cards (see summarize.rs).
       summary: values.summary || null,
       subject: String(values.subject || ""),
       body: String(values.body || ""),
@@ -2415,7 +2391,6 @@ Item {
       replyTo: String(values.replyTo || "").trim(),
       signature: String(values.signature || ""),
       signatureHtml: String(values.signatureHtml || ""),
-      // A Summarize reply's messages, for the HTML cards (see summarize.rs).
       summary: values.summary || null,
       subject: String(values.subject || ""),
       body: body,
