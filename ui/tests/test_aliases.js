@@ -119,6 +119,13 @@ deepEqual(aliases.sendAsList("me@icloud.com", null), [
   assert.strictEqual(JSON.stringify(rows), before, "the provider's list is not edited in place")
   // No name is the list as it was: the address goes out alone.
   assert.strictEqual(aliases.withSenderName(rows, "   "), rows)
+  // Gmail: the configured name fills a blank primary row only.
+  const gmail = [{ email: "me@gmail.com", displayName: "", isPrimary: true, isDefault: true },
+    { email: "alias@x.org", displayName: "", isPrimary: false, isDefault: false }]
+  deepEqual(aliases.withSenderName(gmail, "Jane", true).map(r => r.displayName), ["Jane", ""])
+  const set = [{ email: "me@gmail.com", displayName: "Jane G. Example", isPrimary: true, isDefault: true }]
+  deepEqual(aliases.withSenderName(set, "Jane", true), set)
+  deepEqual(aliases.withSenderName(set, "Jane").map(r => r.displayName), ["Jane"])
   deepEqual(aliases.withSenderName(null, "Jane"), [])
 }
 

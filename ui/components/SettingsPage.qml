@@ -96,7 +96,8 @@ Column {
   readonly property bool senderNameEditable: {
     var entry = signatureAccount(selectedNameAccountId)
     return !!(service && service.backendCanNameSender && entry
-      && Accounts.namesSender(entry.provider))
+      && Accounts.namesSender(entry.provider)
+      && (!service.backend || service.backend.apiVersion >= Accounts.senderNameApi(entry.provider)))
   }
 
   function saveSenderName() {

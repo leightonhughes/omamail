@@ -905,7 +905,9 @@ assert.strictEqual(accounts.senderNameText("Jane\u0085Example\u009f"), "Jane Exa
 // Only the mailboxes with no server to name the sender take it from here.
 assert.strictEqual(accounts.namesSender("imap"), true)
 assert.strictEqual(accounts.namesSender("outlook"), true)
-assert.strictEqual(accounts.namesSender("gmail"), false)
+assert.strictEqual(accounts.namesSender("gmail"), true)
+assert.strictEqual(accounts.senderNameApi("gmail"), 10)
+assert.strictEqual(accounts.senderNameApi("imap"), 7)
 assert.strictEqual(accounts.namesSender("jmap"), false)
 assert.strictEqual(accounts.namesSender("hey"), false)
 assert.strictEqual(accounts.namesSender(undefined), false)

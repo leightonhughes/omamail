@@ -15,6 +15,7 @@ Item {
   QtObject {
     id: fakeBackend
     property bool ready: true
+    property int apiVersion: 10
     property string method: ""
     property var params: null
     property var callback: null
@@ -116,6 +117,7 @@ Item {
     }
 
     function init() {
+      fakeBackend.apiVersion = 10
       fakeService.backendCanNameSender = true
       page.selectNameAccount("a@example.org")
       // The fake service keeps nothing it is given, so the fields go back to
@@ -244,13 +246,17 @@ Item {
       verify(field.visible)
     }
 
-    // A server-named mailbox would ignore the field, so there is none.
-    function test_a_server_named_mailbox_has_no_sender_name_field() {
+    // Gmail takes a name too, for a primary address its settings leave
+    // unnamed — but only on a backend that names its agent sends (API 10).
+    function test_a_gmail_mailbox_takes_a_sender_name_on_api_10() {
       page.selectNameAccount("b@example.net")
-      verify(!senderField().visible, "Gmail names the sender itself")
-      compare(page.senderNameEditable, false)
+      fakeBackend.apiVersion = 9
+      verify(!senderField().visible, "an API 9 backend sends Gmail's own name")
       page.saveSenderName()
       compare(fakeService.senderNameWrites, 0, "nothing is written for it either")
+      fakeBackend.apiVersion = 10
+      verify(senderField().visible)
+      compare(page.senderNameEditable, true)
     }
 
     // A backend older than API 7 sends the bare address whatever is stored, so

@@ -567,7 +567,13 @@ function setLabel(list, id, text) {
 // The backend makes the same distinction when it builds the From header.
 function namesSender(provider) {
   var id = String(provider || "")
-  return id === "imap" || id === "outlook"
+  return id === "imap" || id === "outlook" || id === "gmail"
+}
+
+// The backend API that names a mailbox's sends from `senderName`: 7 for IMAP
+// and Outlook, 10 for Gmail, whose own send-as list is filled in only from 10.
+function senderNameApi(provider) {
+  return String(provider || "") === "gmail" ? 10 : 7
 }
 
 // One header line, so a pasted line break, tab or other control character

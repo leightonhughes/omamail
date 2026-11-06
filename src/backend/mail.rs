@@ -22,6 +22,22 @@ fn configured_identities(settings: &Value) -> Result<Value, &'static str> {
     Ok(json!(rows))
 }
 
+// Gmail's send-as list with the account's sender name on a primary address
+// Gmail leaves unnamed, so agent sends name it as the composer does. A name
+// set in Gmail wins; aliases keep their own.
+fn named_primary(rows: Value, settings: Option<&Value>) -> Value {
+    let name = sender_name(settings.and_then(|s| s["senderName"].as_str()).unwrap_or(""));
+    let Value::Array(mut list) = rows else { return rows };
+    if !name.is_empty() {
+        for row in &mut list {
+            if row["isPrimary"] == true && row["displayName"].as_str().unwrap_or("").trim().is_empty() {
+                row["displayName"] = json!(name);
+            }
+        }
+    }
+    Value::Array(list)
+}
+
 // One header line, cleaned the way `Accounts.senderNameText` cleans it, so a
 // hand-edited entry names agent sends exactly as it names composer sends
 // instead of failing them.
@@ -54,7 +70,14 @@ impl crate::mail::send::IdentityLookup for ProviderIdentities<'_> {
             }
             let params = json!({"accountId":account.id});
             match account.provider {
-                Provider::Gmail => self.session.gmail.call("gmail.sendAs", &params).await,
+                Provider::Gmail => {
+                    let rows = self.session.gmail.call("gmail.sendAs", &params).await?;
+                    let id = account.id.clone();
+                    let settings = tokio::task::spawn_blocking(move || crate::auth::settings_readonly("gmail", &id))
+                        .await
+                        .map_err(|_| "worker_failed")?;
+                    Ok(named_primary(rows, settings.ok().as_ref()))
+                }
                 Provider::Jmap => {
                     let value = self.session.jmap.call("jmap.sendAs", &params).await?;
                     Ok(value["data"].clone())
@@ -697,6 +720,19 @@ mod tests {
         assert_eq!(edited[0]["displayName"], "Jane Bcc: x@example.org Example", "one header line, as the UI stores it");
         let c1 = configured_identities(&json!({"email":"me@example.org","senderName":"Jane\u{85}Example\u{9f}"})).unwrap();
         assert_eq!(c1[0]["displayName"], "Jane Example", "a C1 control too, which the composer would refuse");
+    }
+
+    #[test]
+    fn gmail_names_only_an_unnamed_primary_address() {
+        let rows = json!([{"email":"me@example.org","displayName":"","isPrimary":true,"isDefault":true},
+            {"email":"alias@example.org","displayName":"","isPrimary":false,"isDefault":false}]);
+        let named = named_primary(rows.clone(), Some(&json!({"senderName":" Jane\r\nBcc: x@example.org "})));
+        assert_eq!(named[0]["displayName"], "Jane Bcc: x@example.org");
+        assert_eq!(named[1]["displayName"], "");
+        assert_eq!(named_primary(rows.clone(), None), rows);
+        assert_eq!(named_primary(rows.clone(), Some(&json!({"senderName":"  "}))), rows);
+        let set = json!([{"email":"me@example.org","displayName":"Gmail Name","isPrimary":true,"isDefault":true}]);
+        assert_eq!(named_primary(set.clone(), Some(&json!({"senderName":"Jane"}))), set);
     }
 
     #[test]

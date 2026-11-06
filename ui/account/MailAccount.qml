@@ -414,8 +414,9 @@ Item {
     // shows in the composer at once, without reloading the send-as list.
     // Only on a backend that names agent sends too (API 7), so the composer
     // and `mail.send` never disagree about who a message is from.
-    var named = Accounts.namesSender(providerId) && !!backend && backend.ready && backend.apiVersion >= 7
-    return named ? Aliases.withSenderName(rows, senderName) : rows
+    var named = Accounts.namesSender(providerId) && !!backend && backend.ready
+      && backend.apiVersion >= Accounts.senderNameApi(providerId)
+    return named ? Aliases.withSenderName(rows, senderName, providerId === "gmail") : rows
   }
   // The address this mailbox answers as when nothing more specific applies.
   // The profile is authoritative once it has loaded; until then the address the

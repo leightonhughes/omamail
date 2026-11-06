@@ -229,14 +229,16 @@ function sendAsList(address, aliases) {
 // name, which is what the backend writes into the From header for it. Only
 // the primary row: an alias was given its own name, or none, where it was
 // typed. A copy, so a list a provider handed over is not edited in place.
-function withSenderName(rows, name) {
+// With `onlyBlank`, a name the server already gives the primary row wins:
+// Gmail's own "Send mail as" name, when set, is the one its web client sends.
+function withSenderName(rows, name, onlyBlank) {
   var list = Array.isArray(rows) ? rows : []
   var wanted = trimmed(name)
   if (wanted === "") return list
   var out = []
   for (var i = 0; i < list.length; i++) {
     var row = list[i]
-    if (row && row.isPrimary === true) {
+    if (row && row.isPrimary === true && !(onlyBlank === true && trimmed(row.displayName) !== "")) {
       var named = {}
       for (var key in row) named[key] = row[key]
       named.displayName = wanted
