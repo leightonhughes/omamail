@@ -338,6 +338,10 @@ fn alternative(lines: &mut Vec<String>, body: &str, html: &str, boundary: &str) 
 fn body_part(lines: &mut Vec<String>, v: &Value, boundary: &str) -> Result<()> {
     let body = field(v, "body");
     let rtl = super::direction::strong_direction(body) == "rtl";
+    if let Some(html) = super::summarize::html_body(v, rtl)? {
+        alternative(lines, body, &html, boundary);
+        return Ok(());
+    }
     if !field(v, "signatureHtml").is_empty() {
         let swapped = super::signature::inline_parts(field(v, "signatureHtml"), "sig");
         let parts = swapped["parts"].as_array().ok_or("invalid_signature")?;

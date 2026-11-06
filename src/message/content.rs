@@ -531,7 +531,9 @@ pub fn request(method: &str, params: &Value) -> Result<Value> {
     match method {
         "message.composeText" => {
             let summary = &params["summary"];
-            let quote = if params.get("body").is_some() {
+            let quote = if params["summarize"].is_object() {
+                super::summarize::plain(&params["summarize"])?
+            } else if params.get("body").is_some() {
                 let prefix = if summary["from"].is_object() {
                     format!(
                         "On {}, {} wrote:\n",

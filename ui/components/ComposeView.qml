@@ -9,6 +9,7 @@ import "../message/Direction.js" as Direction
 import "../message/Message.js" as Mail
 import "../compose/Recipients.js" as Recipients
 import "../compose/Senders.js" as Senders
+import "../compose/Summarize.js" as Summarize
 import "../agent/Agent.js" as Agent
 
 // Composing takes over the whole content area of the one window rather than
@@ -268,6 +269,10 @@ DropArea {
     composeTextSerial++
     pendingQuoteSummary = null
     pendingQuoteText = ""
+    summarizeSerial++
+    summarizeSource = null
+    replySummary = null
+    replyText = ""
     draftKey = newDraftKey()
     forwardLoadSerial++
     fromMenu.close()
@@ -319,6 +324,46 @@ DropArea {
   property var pendingQuoteSummary: null
   property string pendingQuoteText: ""
 
+  // Summarize replies (src/message/summarize.rs): quote every message of the
+  // conversation once, in its own words, instead of the one being answered.
+  // `replySummary` and `replyText` are what Quote falls back to.
+  property var summarizeSource: null
+  property var replySummary: null
+  property string replyText: ""
+  property int summarizeSerial: 0
+  readonly property bool canSummarize: !!service && service.backendCanSummarizeReplies === true
+    && (mode === "reply" || mode === "replyAll") && !!replySummary
+
+  // Placed at once from the message being answered, then again with the rest
+  // of the conversation once it has been read, unless the body was edited.
+  function startSummarize() {
+    var serial = ++summarizeSerial
+    summarizeSource = null
+    if (!canSummarize || !service.summarizeReplies) return
+    var open = Summarize.entry(replySummary, replyText)
+    summarizeSource = Summarize.source([open])
+    var reading = service.reading
+    var projection = service.conversationProjection || ({})
+    var ids = Summarize.memberIds(projection.memberIds, replySummary.id, 20)
+    if (!reading || typeof reading.threadMessages !== "function" || ids.length === 0) return
+    reading.threadMessages(ids, function(entries) {
+      if (serial !== root.summarizeSerial || !root.opened) return
+      root.summarizeSource = Summarize.source([open].concat(entries))
+      if (!root.bodyWasEdited && bodyEdit.text === root.placedBody) root.placeBody()
+    })
+  }
+
+  function setSummarize(on) {
+    if (!canSummarize || bodyWasEdited) return
+    service.summarizeReplies = on
+    startSummarize()
+    if (!on) {
+      pendingQuoteSummary = replySummary
+      pendingQuoteText = replyText
+    }
+    placeBody()
+  }
+
   function placeBody() {
     var serial = ++composeTextSerial
     var account = accountId
@@ -326,6 +371,7 @@ DropArea {
     var previouslyEdited = bodyWasEdited
     var previousSubject = subjectField.text
     var params = { signature: accountSignature, quote: bodyQuote }
+    if (summarizeSource) params.summarize = summarizeSource
     if (pendingQuoteSummary) {
       params.summary = pendingQuoteSummary
       params.body = pendingQuoteText
@@ -642,6 +688,9 @@ DropArea {
       }
       pendingQuoteSummary = summary
       pendingQuoteText = String(bodyText || "")
+      replySummary = summary
+      replyText = pendingQuoteText
+      startSummarize()
     }
 
     bodyPrefix = ""
@@ -934,7 +983,9 @@ DropArea {
       draftId: root.sourceDraftId,
       // A forward starts a new conversation; a reply must stay in the old one.
       threadId: root.mode === "forward" ? "" : root.threadId,
-      inReplyTo: root.mode === "forward" ? "" : root.inReplyTo
+      inReplyTo: root.mode === "forward" ? "" : root.inReplyTo,
+      // The HTML part draws cards only while the summary is unedited.
+      summary: root.mode === "forward" ? null : root.summarizeSource
     }))
     if (accepted) parkForSend(accepted === true ? "" : String(accepted))
   }
@@ -1326,6 +1377,20 @@ DropArea {
           bordered: false
           fontSize: Style.font.caption
           onClicked: { root.bccVisible = !root.bccVisible; root.noteUserModified() }
+        }
+
+        Button {
+          id: summarizeToggle
+          objectName: "compose-summarize-toggle"
+          visible: root.canSummarize
+          text: root.summarizeSource ? "Summarize" : "Quote"
+          tooltipText: root.bodyWasEdited
+            ? "Quote or Summarize is chosen before the reply is edited"
+            : (root.summarizeSource ? "Quote only the message being answered" : "Quote each message of the conversation once")
+          foreground: root.bodyWasEdited ? root.dimColor : root.textColor
+          bordered: false
+          fontSize: Style.font.caption
+          onClicked: root.setSummarize(!root.summarizeSource)
         }
 
         Button {

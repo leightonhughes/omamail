@@ -106,6 +106,9 @@ Item {
   readonly property bool backendCanDiscoverCalendars: backend.ready && backend.apiVersion >= 5
   readonly property bool backendCanGoogleCalendars: backend.ready && backend.apiVersion >= 6
   readonly property bool backendCanSaveInvitations: backend.ready && backend.apiVersion >= 9
+  readonly property bool backendCanSummarizeReplies: backend.ready && backend.apiVersion >= 10
+  // Quote or Summarize for the next reply: the last choice, as in Postbox.
+  property bool summarizeReplies: true
   // Older backends send the bare address.
   readonly property bool backendCanNameSender: backend.ready && backend.apiVersion >= 7
   readonly property bool calendarRemindersEnabled: !settings || settings.calendarRemindersEnabled !== false
