@@ -27,3 +27,16 @@ assert.strictEqual(summarize.source([]), null)
 deepEqual(summarize.memberIds(["a", "b", "open", "b", "c"], "open", 20), ["a", "b", "c"])
 deepEqual(summarize.memberIds(["a", "b", "c", "d"], "x", 2), ["c", "d"])
 deepEqual(summarize.memberIds(null, "x", 2), [])
+
+// A late thread swaps the placed quote in place, around what was typed.
+const oldQ = "> Kate\n> Maple?"
+const newQ = "> Kate\n> Maple?\n>\n> Ben\n> Birch?"
+const typed = "Oak, I think.\n\nCheers\n\n" + oldQ
+deepEqual(summarize.requote(typed, oldQ, newQ, 13), { at: 23, end: 23 + oldQ.length, cursor: 13 })
+// A cursor after the quote moves with it; one inside it stays at its start.
+assert.strictEqual(summarize.requote(typed + "\nPS", oldQ, newQ, typed.length + 3).cursor, typed.length + 3 + newQ.length - oldQ.length)
+assert.strictEqual(summarize.requote(typed, oldQ, newQ, 26).cursor, 23)
+// Edited inside the quote, or quoted twice: leave the body alone.
+assert.strictEqual(summarize.requote(typed.replace("Maple", "Elm"), oldQ, newQ, 0), null)
+assert.strictEqual(summarize.requote(typed + oldQ, oldQ, newQ, 0), null)
+assert.strictEqual(summarize.requote(typed, "", newQ, 0), null)

@@ -52,3 +52,18 @@ function memberIds(ids, openId, limit) {
   var keep = Number(limit) > 0 ? Number(limit) : 20
   return out.length > keep ? out.slice(out.length - keep) : out
 }
+
+// Where to swap a placed quote for a longer one: the old quote's span, when it
+// is in the body exactly once and untouched, and where the cursor goes so it
+// stays beside what was typed. Null leaves the body as it is.
+function requote(body, oldQuote, newQuote, cursor) {
+  var text = String(body || "")
+  var old = String(oldQuote || "")
+  var next = String(newQuote || "")
+  if (old === "" || next === "") return null
+  var at = text.indexOf(old)
+  if (at < 0 || text.indexOf(old, at + 1) >= 0) return null
+  var end = at + old.length
+  var place = Number(cursor) || 0
+  return { at: at, end: end, cursor: place >= end ? place + next.length - old.length : Math.min(place, at) }
+}

@@ -356,7 +356,7 @@ DropArea {
       reading.threadMessages(ids, function(entries) {
         if (serial !== root.summarizeSerial || !root.opened) return
         root.summarizeSource = Summarize.source([open].concat(entries))
-        if (!root.bodyWasEdited && bodyEdit.text === root.placedBody) root.placeBody()
+        root.requote()
       })
     }
     // JMAP rows carry their conversation; Gmail's do not, so ask for it.
@@ -365,6 +365,34 @@ DropArea {
     if (members.length > 1 || !replySummary.threadId || !api || typeof api.getThreadMemberIds !== "function")
       readMembers(members)
     else api.getThreadMemberIds(String(replySummary.threadId), readMembers)
+  }
+
+  // The thread often finishes reading after the reply was placed, or typed
+  // into. Swap the quote in place when the one placed is still there intact,
+  // keeping what was typed and the cursor; otherwise leave the body alone.
+  property int requoteSerial: 0
+  function requote() {
+    var source = summarizeSource
+    var oldQuote = bodyQuote
+    if (!source || source === placedSource || oldQuote === "" || !service || !service.backend) return
+    var serial = ++requoteSerial
+    var summarizing = summarizeSerial
+    service.backend.call("message.composeText", { signature: "", summarize: source }, function(result, error) {
+      if (serial !== root.requoteSerial || summarizing !== root.summarizeSerial || !root.opened) return
+      if (error || !result || root.bodyQuote !== oldQuote || root.summarizeSource !== source) return
+      var quote = String(result.quote || "")
+      var swap = Summarize.requote(bodyEdit.text, oldQuote, quote, bodyEdit.cursorPosition)
+      if (!swap) return
+      var unedited = !root.bodyWasEdited && bodyEdit.text === root.placedBody
+      root.settingBodyText = true
+      bodyEdit.remove(swap.at, swap.end)
+      bodyEdit.insert(swap.at, quote)
+      root.settingBodyText = false
+      bodyEdit.cursorPosition = swap.cursor
+      root.bodyQuote = quote
+      root.placedSource = source
+      if (unedited) root.placedBody = bodyEdit.text
+    })
   }
 
   function setSummarize(on) {
@@ -404,6 +432,8 @@ DropArea {
       root.placedBody = root.bodyPrefix + String(result.body || "")
       root.placedSource = params.summarize || null
       root.setBodyText(root.placedBody)
+      // The thread may have finished reading while this was being placed.
+      if (root.summarizeSource && root.placedSource) root.requote()
       if (params.summary && (root.mode === "reply" || root.mode === "replyAll") && subjectField.text === previousSubject)
         subjectField.text = String(result.replySubject || previousSubject)
     })
