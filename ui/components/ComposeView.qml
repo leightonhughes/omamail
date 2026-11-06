@@ -328,6 +328,8 @@ DropArea {
   // Summarize replies (src/message/summarize.rs): quote every message of the
   // conversation once, in its own words, instead of the one being answered.
   // `replySummary` and `replyText` are what Quote falls back to.
+  // Quote or Summarize for the next reply: the last choice, as in Postbox.
+  property bool summarizeReplies: true
   property var summarizeSource: null
   // The source the body was last placed from. Send carries this one, so the
   // HTML cards always match the quote in the body, even when the thread
@@ -344,7 +346,7 @@ DropArea {
   function startSummarize() {
     var serial = ++summarizeSerial
     summarizeSource = null
-    if (!canSummarize || !service.summarizeReplies) return
+    if (!canSummarize || !summarizeReplies) return
     var open = Summarize.entry(replySummary, replyText)
     summarizeSource = Summarize.source([open])
     var reading = service.reading
@@ -417,7 +419,7 @@ DropArea {
 
   function setSummarize(on) {
     if (!canSummarize || bodyWasEdited) return
-    service.summarizeReplies = on
+    summarizeReplies = on
     startSummarize()
     if (!on) {
       pendingQuoteSummary = replySummary

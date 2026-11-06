@@ -74,6 +74,24 @@ Item {
       backend.connected = false
       compare(service.backendCanSuggestGoogleContacts, false)
     }
+    // An official API 10 build without Summarize must not offer the toggle:
+    // it is gated on the backend advertising `gmail.thread`, not the number.
+    function test_summarize_needs_the_backend_to_offer_it() {
+      var service = createTemporaryObject(factory, parent)
+      verify(service !== null)
+      var backend = service.backend
+      backend.launchEnabled = true
+      backend.connected = true
+      backend.protocolInfo = ({ apiVersion: 10, methods: ["message.composeText"] })
+      compare(service.backendCanSummarizeReplies, false)
+      backend.protocolInfo = ({ apiVersion: 9, methods: ["gmail.thread"] })
+      compare(service.backendCanSummarizeReplies, false)
+      backend.protocolInfo = ({ apiVersion: 10, methods: ["message.composeText", "gmail.thread"] })
+      compare(service.backendCanSummarizeReplies, true)
+      backend.connected = false
+      compare(service.backendCanSummarizeReplies, false)
+    }
+
     function test_contacts_loading_resets_when_the_backend_drops() {
       var service = createTemporaryObject(factory, parent)
       verify(service !== null)

@@ -1613,6 +1613,72 @@
       "equals": {
         "message": "outbox_invalid_payload"
       }
+    },
+    {
+      "name": "Gmail thread lookup requires a thread id",
+      "method": "gmail.thread",
+      "params": {
+        "accountId": "contract@example.org"
+      },
+      "errorCode": -32602,
+      "equals": {
+        "message": "Invalid params"
+      }
+    },
+    {
+      "name": "Summarize quotes each message once, newest first",
+      "method": "message.composeText",
+      "params": {
+        "summarize": {
+          "messages": [
+            {
+              "name": "Kate Smith",
+              "email": "kate@example.org",
+              "date": "",
+              "when": "Jan 15, 2010 09:18",
+              "body": "Maple?"
+            },
+            {
+              "name": "Ben",
+              "email": "ben@example.org",
+              "date": "",
+              "when": "Jan 15, 2010 09:20",
+              "body": "Birch?\n\n> an older quote"
+            }
+          ],
+          "newestFirst": true
+        }
+      },
+      "equals": {
+        "quote": "> Ben <mailto:ben@example.org>\n> Jan 15, 2010 09:20\n> Birch?\n>\n>\n> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:18\n> Maple?"
+      }
+    },
+    {
+      "name": "Summarize compose accepts the placed summary",
+      "method": "message.compose",
+      "params": {
+        "fields": {
+          "from": "me@example.org",
+          "to": "you@example.org",
+          "subject": "Re: Trees",
+          "body": "Oak.\n\n> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:18\n> Maple?",
+          "summary": {
+            "messages": [
+              {
+                "name": "Kate Smith",
+                "email": "kate@example.org",
+                "date": "",
+                "when": "Jan 15, 2010 09:18",
+                "body": "Maple?"
+              }
+            ],
+            "newestFirst": true
+          }
+        }
+      },
+      "types": {
+        "raw": "string"
+      }
     }
   ],
   "unreleased": {
@@ -1626,7 +1692,10 @@
       "Calendar authentication errors preserve safe context",
       "CalDAV verification refuses a plain-http address before any request",
       "CalDAV verification requires the password it is to check",
-      "Google Contacts refuses an account that is not a Gmail address"
+      "Google Contacts refuses an account that is not a Gmail address",
+      "Gmail thread lookup requires a thread id",
+      "Summarize quotes each message once, newest first",
+      "Summarize compose accepts the placed summary"
     ]
   }
 }
