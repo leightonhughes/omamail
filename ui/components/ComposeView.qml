@@ -483,6 +483,7 @@ DropArea {
       body: bodyEdit.text,
       bodyQuote: bodyQuote,
       placedBody: placedBody,
+      placedSource: placedSource,
       bodyWasEdited: bodyWasEdited,
       userModified: userModified,
       accountId: accountId,
@@ -533,6 +534,8 @@ DropArea {
     bodyQuote = typeof saved.bodyQuote === "string" ? saved.bodyQuote : ""
     setBodyText(String(saved.body || ""))
     placedBody = String(saved.placedBody || "")
+    // Cards still send while this quote is intact; summarize.rs checks it.
+    placedSource = saved.placedSource && typeof saved.placedSource === "object" ? saved.placedSource : null
     bodyWasEdited = saved.bodyWasEdited === true
     userModified = typeof saved.userModified === "boolean"
       ? saved.userModified : hasMeaningfulDraft()

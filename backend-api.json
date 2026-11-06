@@ -1679,6 +1679,28 @@
       "types": {
         "raw": "string"
       }
+    },
+    {
+      "name": "recovery refuses a malformed Summarize source",
+      "method": "compose.recoverySave",
+      "params": {
+        "expectedRevision": "unused",
+        "record": {
+          "version": 1,
+          "active": true,
+          "draft": {
+            "body": "Answer",
+            "placedSource": {
+              "messages": "not a list",
+              "newestFirst": true
+            }
+          }
+        }
+      },
+      "errorCode": -32000,
+      "equals": {
+        "message": "recovery_invalid"
+      }
     }
   ],
   "unreleased": {
@@ -1695,7 +1717,8 @@
       "Google Contacts refuses an account that is not a Gmail address",
       "Gmail thread lookup requires a thread id",
       "Summarize quotes each message once, newest first",
-      "Summarize compose accepts the placed summary"
+      "Summarize compose accepts the placed summary",
+      "recovery refuses a malformed Summarize source"
     ]
   }
 }

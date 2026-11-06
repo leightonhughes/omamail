@@ -42,6 +42,30 @@ fn text(value: &Value) -> String {
 fn empty() -> Value {
     json!({"active":false,"returnView":"","draft":null,"parked":[]})
 }
+// The Summarize source a reply's quote was placed from, so a recovered draft
+// still sends its cards. App-owned metadata: only the fields summarize.rs reads
+// are kept, as strings, within its own limits; anything else refuses the record.
+fn placed_source(value: &Value) -> Result<Value> {
+    let list = value["messages"].as_array().ok_or("recovery_invalid")?;
+    if list.is_empty() || list.len() > 64 || !value["newestFirst"].is_boolean() {
+        return Err("recovery_invalid");
+    }
+    let mut messages = Vec::new();
+    for item in list {
+        let mut entry = json!({});
+        for (key, limit) in [("name", 4096), ("email", 4096), ("date", 64), ("when", 256), ("body", 256 * 1024)] {
+            let field = item[key].as_str().ok_or("recovery_invalid")?;
+            if field.len() > limit {
+                return Err("recovery_too_large");
+            }
+            entry[key] = json!(field);
+        }
+        messages.push(entry);
+    }
+    let out = json!({"messages":messages,"newestFirst":value["newestFirst"]});
+    crate::message::summarize::plain(&out).map_err(|_| "recovery_invalid")?;
+    Ok(out)
+}
 fn draft(value: &Value) -> Result<Value> {
     let mut out = json!({});
     for key in [
@@ -68,6 +92,9 @@ fn draft(value: &Value) -> Result<Value> {
             return Err("recovery_too_large");
         }
         out["bodyQuote"] = json!(quote);
+    }
+    if let Some(source) = value.get("placedSource").filter(|v| !v.is_null()) {
+        out["placedSource"] = placed_source(source)?;
     }
     if let Some(id) = value.get("pendingSendId") {
         let id = id.as_str().ok_or("recovery_invalid_send_id")?;

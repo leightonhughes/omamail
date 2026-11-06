@@ -70,6 +70,32 @@ fn recovery_keeps_edits_and_attachment_metadata_but_not_untouched_signatures() {
     assert!(attachment.get("extra").is_none());
 }
 #[test]
+fn summarize_source_survives_recovery_within_its_limits() {
+    let temp = Temp::new();
+    let source = json!({"messages":[{"name":"Kate","email":"k@example.org","date":"2010-01-14T22:20:00Z",
+        "when":"Jan 15","body":"Maple?","extra":"dropped"}],"newestFirst":true});
+    let mut value = saved("Reply");
+    value["draft"]["placedSource"] = source.clone();
+    value["parked"] = json!([{"body":"Parked", "placedSource":source}, {"body":"Plain", "placedSource":null}]);
+    let answer = call_at(&temp.0, "compose.recoverySave",
+        &json!({"record":value, "expectedRevision":revision(&[])})).unwrap();
+    let kept = json!({"messages":[{"name":"Kate","email":"k@example.org","date":"2010-01-14T22:20:00Z",
+        "when":"Jan 15","body":"Maple?"}],"newestFirst":true});
+    assert_eq!(answer["record"]["draft"]["placedSource"], kept);
+    assert_eq!(answer["record"]["parked"][0]["placedSource"], kept);
+    assert!(answer["record"]["parked"][1].get("placedSource").is_none());
+    for bad in [json!({"messages":[],"newestFirst":true}), json!({"messages":[{"body":7}],"newestFirst":true}),
+        json!({"messages":[{"name":"","email":"","date":"","when":"","body":"x".repeat(256 * 1024 + 1)}],"newestFirst":true}),
+        json!({"messages":vec![json!({"name":"a","email":"","date":"","when":"","body":"b"}); 65],"newestFirst":true}),
+        json!("text")] {
+        let mut value = saved("Reply");
+        value["draft"]["placedSource"] = bad;
+        assert!(call_at(&temp.0, "compose.recoverySave",
+            &json!({"record":value, "expectedRevision":answer["revision"]})).is_err());
+    }
+    assert_eq!(call_at(&temp.0, "compose.recoveryRead", &json!({})).unwrap(), answer);
+}
+#[test]
 fn reply_quote_survives_active_and_parked_durable_recovery() {
     let temp = Temp::new();
     let quote = "On Monday, 合成 wrote:\r\n> \"quoted\" \\ text\n";
