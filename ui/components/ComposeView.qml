@@ -271,6 +271,7 @@ DropArea {
     pendingQuoteText = ""
     summarizeSerial++
     summarizeSource = null
+    placedSource = null
     replySummary = null
     replyText = ""
     draftKey = newDraftKey()
@@ -328,6 +329,10 @@ DropArea {
   // conversation once, in its own words, instead of the one being answered.
   // `replySummary` and `replyText` are what Quote falls back to.
   property var summarizeSource: null
+  // The source the body was last placed from. Send carries this one, so the
+  // HTML cards always match the quote in the body, even when the thread
+  // finished reading after the reply was edited.
+  property var placedSource: null
   property var replySummary: null
   property string replyText: ""
   property int summarizeSerial: 0
@@ -397,6 +402,7 @@ DropArea {
       root.pendingQuoteSummary = null
       root.pendingQuoteText = ""
       root.placedBody = root.bodyPrefix + String(result.body || "")
+      root.placedSource = params.summarize || null
       root.setBodyText(root.placedBody)
       if (params.summary && (root.mode === "reply" || root.mode === "replyAll") && subjectField.text === previousSubject)
         subjectField.text = String(result.replySubject || previousSubject)
@@ -994,7 +1000,7 @@ DropArea {
       threadId: root.mode === "forward" ? "" : root.threadId,
       inReplyTo: root.mode === "forward" ? "" : root.inReplyTo,
       // The HTML part draws cards only while the summary is unedited.
-      summary: root.mode === "forward" ? null : root.summarizeSource
+      summary: root.mode === "forward" ? null : root.placedSource
     }))
     if (accepted) parkForSend(accepted === true ? "" : String(accepted))
   }

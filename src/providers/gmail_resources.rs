@@ -54,7 +54,9 @@ pub(super) fn normalize(method: &str, answer: Value) -> Value {
             Some(json!({"email":email,"displayName":text(&entry["displayName"]).trim(),"isPrimary":primary,"isDefault":entry["isDefault"]==true}))
         }).collect()),
         // A conversation's message ids, oldest first, for a Summarize reply.
+        // Drafts are left out: the reply's own autosaved draft is one of them.
         "gmail.thread" => json!({"id":text(&answer["id"]),"messageIds":answer["messages"].as_array().into_iter().flatten()
+            .filter(|m| !m["labelIds"].as_array().is_some_and(|l| l.iter().any(|x| x == "DRAFT")))
             .map(|m| text(&m["id"])).filter(|id| !id.is_empty()).collect::<Vec<_>>()}),
         _ => answer,
     }
@@ -70,7 +72,8 @@ mod tests {
         assert_eq!(
             normalize(
                 "gmail.thread",
-                json!({"id":"t","messages":[{"id":"a","threadId":"t"},{"id":""},{"id":"c"}]})
+                json!({"id":"t","messages":[{"id":"a","threadId":"t","labelIds":["SENT"]},{"id":""},
+                    {"id":"d","labelIds":["DRAFT"]},{"id":"c","labelIds":["INBOX","UNREAD"]}]})
             ),
             json!({"id":"t","messageIds":["a","c"]})
         );
