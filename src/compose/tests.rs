@@ -96,14 +96,17 @@ fn summarize_source_survives_recovery_within_its_limits() {
     assert_eq!(call_at(&temp.0, "compose.recoveryRead", &json!({})).unwrap(), answer);
 }
 #[test]
-fn forward_summarize_source_keeps_its_flag_and_drops_old_headers() {
+fn forward_summarize_source_keeps_its_recipients_within_limits() {
     let temp = Temp::new();
-    // As b444341 saved it, with To, CC and Subject on each message.
+    let person = |email: &str| json!({"name":"", "email":email, "extra":"dropped"});
+    // As b444341 saved it, with a Subject too; 0feba76's had neither list.
     let message = json!({"name":"Kate","email":"k@example.org","date":"2010-01-14T22:20:00Z","when":"Jan 15",
-        "body":"Maple?","subject":"Trees","to":[{"name":"","email":"b@example.org"}],"cc":[]});
+        "body":"Maple?","subject":"Trees","to":[person("b@example.org")],"cc":[]});
+    let bare = json!({"name":"Ben","email":"b@example.org","date":"2010-01-14T22:10:00Z","when":"Jan 15",
+        "body":"Birch?"});
     let mut value = saved("Fwd");
     value["draft"]["placedSource"] =
-        json!({"messages":[message],"newestFirst":true,"forward":true});
+        json!({"messages":[message.clone(), bare.clone()],"newestFirst":true,"forward":true});
     let answer = call_at(
         &temp.0,
         "compose.recoverySave",
@@ -113,17 +116,33 @@ fn forward_summarize_source_keeps_its_flag_and_drops_old_headers() {
     assert_eq!(
         answer["record"]["draft"]["placedSource"],
         json!({"messages":[{"name":"Kate","email":"k@example.org","date":"2010-01-14T22:20:00Z",
-            "when":"Jan 15","body":"Maple?"}],"newestFirst":true,"forward":true})
+            "when":"Jan 15","body":"Maple?","to":[{"name":"","email":"b@example.org"}],"cc":[]}, bare],
+            "newestFirst":true,"forward":true})
     );
-    let mut value = saved("Fwd");
-    value["draft"]["placedSource"] = json!({"messages":[{"name":"Kate","email":"","date":"","when":"",
-        "body":"Maple?"}],"newestFirst":true,"forward":"yes"});
-    let refused = call_at(
-        &temp.0,
-        "compose.recoverySave",
-        &json!({"record":value, "expectedRevision":answer["revision"]}),
-    );
-    assert_eq!(refused.unwrap_err(), "recovery_invalid");
+    let with = |key: &str, field: Value| {
+        let mut m = message.clone();
+        m[key] = field;
+        json!({"messages":[m],"newestFirst":true,"forward":true})
+    };
+    let mut not_a_flag = with("cc", json!([]));
+    not_a_flag["forward"] = json!("yes");
+    for (bad, error) in [
+        (not_a_flag, "recovery_invalid"),
+        (with("to", json!("b@example.org")), "recovery_invalid"),
+        (with("to", json!([{"name":"B"}])), "recovery_invalid"),
+        (with("cc", json!(vec![person("c@example.org"); 101])), "recovery_too_large"),
+        (with("cc", json!([{"name":"", "email":"x".repeat(4097)}])), "recovery_too_large"),
+        (with("to", json!([{"name":"x".repeat(4097), "email":""}])), "recovery_too_large"),
+    ] {
+        let mut value = saved("Fwd");
+        value["draft"]["placedSource"] = bad;
+        let refused = call_at(
+            &temp.0,
+            "compose.recoverySave",
+            &json!({"record":value, "expectedRevision":answer["revision"]}),
+        );
+        assert_eq!(refused.unwrap_err(), error);
+    }
     assert_eq!(
         call_at(&temp.0, "compose.recoveryRead", &json!({})).unwrap(),
         answer

@@ -6,7 +6,16 @@ const summarize = load("compose/Summarize.js")
 const kate = { from: { name: "Kate Smith", email: "kate@x.org", display: "Kate Smith" },
   date: "2010-01-14T22:20:00.000Z", fullTime: "Jan 15, 2010 09:20" }
 deepEqual(summarize.entry(kate, "Maple?"),
-  { name: "Kate Smith", email: "kate@x.org", date: "2010-01-14T22:20:00.000Z", when: "Jan 15, 2010 09:20", body: "Maple?" })
+  { name: "Kate Smith", email: "kate@x.org", date: "2010-01-14T22:20:00.000Z", when: "Jan 15, 2010 09:20", body: "Maple?",
+    to: [], cc: [] })
+// Each message's own To and CC, without the list's display field; no subject.
+const sent = summarize.entry({ subject: "Re: Trees", to: [{ name: "Ben", email: "b@x.org", display: "Ben" }],
+  cc: [{ email: "c@x.org" }] }, "")
+deepEqual([sent.to, sent.cc, "subject" in sent], [[{ name: "Ben", email: "b@x.org" }], [{ name: "", email: "c@x.org" }], false])
+const crowd = []
+for (let i = 0; i < 130; i++) crowd.push({ email: "p" + i + "@x.org" })
+assert.strictEqual(summarize.entry({ cc: crowd }, "").cc.length, 100)
+assert.strictEqual(summarize.entry({ cc: crowd }, "").cc[99].email, "p99@x.org")
 // The reader's summaries carry a Date (and dateMs), not the wire string.
 assert.strictEqual(summarize.entry({ date: new Date("2026-11-06T04:47:51Z") }, "").date, "2026-11-06T04:47:51.000Z")
 assert.strictEqual(summarize.entry({ dateMs: 1263507600000, date: new Date(0) }, "").date, "2010-01-14T22:20:00.000Z")

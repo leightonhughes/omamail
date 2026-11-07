@@ -365,7 +365,10 @@ Item {
       var entry = compose.summarizeSource.messages[0]
       compare(entry.email, "sender@example.com")
       compare(entry.body, "Original body")
-      compare(entry.to, undefined, "a forward's cards carry no To, CC or Subject")
+      compare(entry.to.length, 2, "a forward's cards know who each message went to")
+      compare(entry.to[0].email, bobId)
+      compare(entry.cc.length, 0)
+      compare(entry.subject, undefined, "but not its subject")
       var placed = compose.placedSource
       compare(placed, compose.summarizeSource, "the placed body came from it")
       compose.submit()

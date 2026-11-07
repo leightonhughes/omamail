@@ -4,8 +4,20 @@
 // stripped from each message, belong to src/message/summarize.rs; this only
 // gathers what the backend is given.
 
+// A message's To or CC people, as summarize.rs takes them: at most 100
+// (MAX_PEOPLE there), the first ones kept.
+function people(list) {
+  var out = []
+  var all = Array.isArray(list) ? list : []
+  for (var i = 0; i < all.length && out.length < 100; i++) {
+    var person = all[i] || ({})
+    out.push({ name: String(person.name || ""), email: String(person.email || "") })
+  }
+  return out
+}
+
 // One message of a Summarize reply or forward, from its summary and its
-// readable text.
+// readable text. A forward's cards name its To and CC people where they change.
 function entry(summary, text) {
   var message = summary || ({})
   var from = message.from || ({})
@@ -19,7 +31,9 @@ function entry(summary, text) {
     email: String(from.email || ""),
     date: at > 0 ? new Date(at).toISOString() : "",
     when: String(message.fullTime || ""),
-    body: String(text || "")
+    body: String(text || ""),
+    to: people(message.to),
+    cc: people(message.cc)
   }
 }
 

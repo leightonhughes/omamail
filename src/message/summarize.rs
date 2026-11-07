@@ -8,20 +8,25 @@
 //! single `<blockquote type="cite">` with its border removed, so clients still
 //! treat the cards as quoted text.
 //!
-//! A forward summarizes the same way, with the same cards; only its
-//! blockquote carries Postbox's forward class.
+//! A forward summarizes the same way, with the same cards, and its blockquote
+//! carries Postbox's forward class. Its cards also say who each message went
+//! to, on a small line under the header: on the oldest card, then only where
+//! the To or CC people differ from the message before.
 //!
 //! A message keeps what its author wrote. Its quoted history goes, and so does
 //! a signature below a `-- ` line; sign-offs and footers without that line stay,
 //! as they did in Postbox, because guessing at them would cut real text.
 use chrono::{DateTime, Local};
 use serde_json::Value;
+use std::collections::BTreeSet;
 
 type Result<T> = std::result::Result<T, &'static str>;
 
 /// At most this many messages are summarized, the newest kept.
 pub const MAX_MESSAGES: usize = 5;
 const MAX_BODY: usize = 256 * 1024;
+/// At most this many To or CC addresses per message; the composer trims to it.
+pub const MAX_PEOPLE: usize = 100;
 
 #[derive(Debug, PartialEq)]
 struct Entry {
@@ -29,6 +34,10 @@ struct Entry {
     email: String,
     when: String,
     body: String,
+    to: Vec<(String, String)>,
+    cc: Vec<(String, String)>,
+    /// A forward's card names its To and CC people.
+    recipients: bool,
 }
 
 fn text(v: &Value) -> &str {
@@ -50,8 +59,43 @@ fn one_line(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// `{messages: [{name, email, date, when, body}], newestFirst, forward}`,
-/// messages in any order. Answers the newest `MAX_MESSAGES`, stripped, in the order to show.
+/// A message's To or CC list, `[{name, email}]`; absent is empty.
+fn people(v: &Value) -> Result<Vec<(String, String)>> {
+    let Some(list) = v.as_array() else {
+        return if v.is_null() {
+            Ok(Vec::new())
+        } else {
+            Err("invalid_params")
+        };
+    };
+    if list.len() > MAX_PEOPLE {
+        return Err("invalid_params");
+    }
+    Ok(list
+        .iter()
+        .map(|p| (one_line(text(&p["name"])), one_line(text(&p["email"]))))
+        .filter(|(name, email)| !name.is_empty() || !email.is_empty())
+        .collect())
+}
+
+/// Who a list names, whatever the order or case.
+fn set(people: &[(String, String)]) -> BTreeSet<String> {
+    people
+        .iter()
+        .map(|(name, email)| if email.is_empty() { name } else { email }.to_lowercase())
+        .collect()
+}
+
+/// A display name, or the address when there is none.
+fn names(people: &[(String, String)]) -> Vec<&str> {
+    people
+        .iter()
+        .map(|(name, email)| if name.is_empty() { email } else { name }.as_str())
+        .collect()
+}
+
+/// `{messages: [{name, email, date, when, body, to, cc}], newestFirst,
+/// forward}`, messages in any order. Answers the newest `MAX_MESSAGES`, stripped, in the order to show.
 fn entries(summary: &Value) -> Result<Vec<Entry>> {
     let list = summary["messages"].as_array().ok_or("invalid_params")?;
     if list.is_empty() || list.len() > 64 {
@@ -82,12 +126,25 @@ fn entries(summary: &Value) -> Result<Vec<Entry>> {
                 email,
                 when: one_line(&when(item)),
                 body: stripped,
+                to: people(&item["to"])?,
+                cc: people(&item["cc"])?,
+                recipients: false,
             },
         ));
     }
     dated.sort_by(|a, b| a.0.cmp(&b.0));
     let keep = dated.len().saturating_sub(MAX_MESSAGES);
     let mut out: Vec<Entry> = dated.into_iter().skip(keep).map(|(_, e)| e).collect();
+    if summary["forward"] == true {
+        // Oldest first here: a card names its people when they differ from
+        // the card before it, so the oldest always does.
+        let mut before = None;
+        for e in out.iter_mut() {
+            let now = Some((set(&e.to), set(&e.cc)));
+            e.recipients = now != before && !(e.to.is_empty() && e.cc.is_empty());
+            before = now;
+        }
+    }
     if summary["newestFirst"] != false {
         out.reverse();
     }
@@ -200,6 +257,15 @@ fn plain_entries(entries: &[Entry]) -> String {
         if !e.when.is_empty() {
             lines.push(format!("> {}", e.when));
         }
+        if e.recipients {
+            let mut parts = Vec::new();
+            for (label, list) in [("to", &e.to), ("cc", &e.cc)] {
+                if !list.is_empty() {
+                    parts.push(format!("{label} {}", names(list).join(", ")));
+                }
+            }
+            lines.push(format!("> {}", parts.join("; ")));
+        }
         for line in e.body.split('\n') {
             lines.push(if line.is_empty() {
                 ">".into()
@@ -228,6 +294,28 @@ fn lines_html(value: &str) -> String {
     escape(value).replace('\n', "<br>\n")
 }
 
+// A forward card's `to … cc …` line, under the header row, in the date's
+// colour with its labels in the name's.
+fn recipients_html(e: &Entry) -> String {
+    if !e.recipients {
+        return String::new();
+    }
+    let mut parts = Vec::new();
+    for (label, list) in [("to", &e.to), ("cc", &e.cc)] {
+        if !list.is_empty() {
+            let names: Vec<String> = names(list).into_iter().map(escape).collect();
+            parts.push(format!(
+                "<span style=\"color:#485664;\">{label}</span> {}",
+                names.join(", ")
+            ));
+        }
+    }
+    format!(
+        "<div style=\"color:#909AA4;font-size:12px;line-height:16px;margin-top:2px;\">{}</div>",
+        parts.join(" &nbsp;")
+    )
+}
+
 // Postbox's markup and inline styles, as its own messages carried them.
 fn card(e: &Entry) -> String {
     let name = if e.email.is_empty() {
@@ -243,8 +331,9 @@ fn card(e: &Entry) -> String {
         )
     };
     format!(
-        "<div class=\"__pbConvHr\" style=\"margin:30px 25px 10px 25px;\"><div style=\"width:100%;border-top:2px solid rgba(146,154,163,0.7);padding-top:10px;\"><div style=\"display:inline-block;white-space:nowrap;vertical-align:middle;width:49%;\">{name}</div><div style=\"display:inline-block;white-space:nowrap;vertical-align:middle;width:48%;text-align:right;\"><font color=\"#909AA4\"><span style=\"padding-left:6px\">{}</span></font></div></div></div>\n<div class=\"__pbConvBody\" style=\"color:#909AA4;margin-left:24px;margin-right:24px;\">{}</div>\n",
+        "<div class=\"__pbConvHr\" style=\"margin:30px 25px 10px 25px;\"><div style=\"width:100%;border-top:2px solid rgba(146,154,163,0.7);padding-top:10px;\"><div style=\"display:inline-block;white-space:nowrap;vertical-align:middle;width:49%;\">{name}</div><div style=\"display:inline-block;white-space:nowrap;vertical-align:middle;width:48%;text-align:right;\"><font color=\"#909AA4\"><span style=\"padding-left:6px\">{}</span></font></div>{}</div></div>\n<div class=\"__pbConvBody\" style=\"color:#909AA4;margin-left:24px;margin-right:24px;\">{}</div>\n",
         escape(&e.when),
+        recipients_html(e),
         lines_html(&e.body)
     )
 }
@@ -456,6 +545,91 @@ mod tests {
         assert!(raw.contains("multipart/mixed") && raw.contains("multipart/alternative"));
         assert!(raw.contains("Content-Type: text/html") && raw.contains("plan.pdf"));
         assert!(!raw.contains("In-Reply-To"));
+    }
+
+    fn person(name: &str, email: &str) -> Value {
+        json!({ "name": name, "email": email })
+    }
+
+    #[test]
+    fn a_forward_names_its_people_only_where_they_change() {
+        // Oldest first: B reorders and recases A's people, C adds a CC, D
+        // reorders C's, E drops the CC again.
+        let (b, c, d) = (person("Ben", "b@x.org"), person("", "c@x.org"), person("Dee", "d@x.org"));
+        let steps = [
+            ("A", json!([b, c]), json!([])),
+            ("B", json!([person("", "C@X.ORG"), b]), json!([])),
+            ("C", json!([b, c]), json!([d])),
+            ("D", json!([c, b]), json!([person("Dee", "D@x.org")])),
+            ("E", json!([b, c]), json!([])),
+        ];
+        let messages: Vec<_> = steps
+            .iter()
+            .enumerate()
+            .map(|(i, (body, to, cc))| json!({"name":"P","email":"p@x.org","date":format!("2024-01-0{}T00:00:00Z", i + 1),
+                "body":body,"to":to,"cc":cc}))
+            .collect();
+        let summary = json!({"forward": true, "messages": messages});
+        let out = plain(&summary).unwrap();
+        let named: Vec<(String, bool)> = out
+            .split(">\n>\n")
+            .map(|card| (card.lines().last().unwrap().trim_start_matches("> ").to_owned(), card.contains("> to ")))
+            .collect();
+        let want: Vec<(String, bool)> = [("E", true), ("D", false), ("C", true), ("B", false), ("A", true)]
+            .iter()
+            .map(|(n, b)| (n.to_string(), *b))
+            .collect();
+        assert_eq!(named, want);
+        assert!(out.contains("> to Ben, c@x.org; cc Dee\n> C"));
+        assert!(out.contains("> to Ben, c@x.org\n> E"));
+        let html = html_body(&json!({"body": out, "summary": summary}), false).unwrap().unwrap();
+        assert_eq!(html.matches("font-size:12px").count(), 3);
+        // A reply never names them, and a source without them names nobody.
+        let mut reply = summary.clone();
+        reply["forward"] = json!(false);
+        assert!(!plain(&reply).unwrap().contains("> to "));
+        let mut bare = summary;
+        for m in bare["messages"].as_array_mut().unwrap() {
+            m.as_object_mut().unwrap().retain(|k, _| k != "to" && k != "cc");
+        }
+        assert!(!plain(&bare).unwrap().contains("> to "));
+        // Too many addresses, or a list that is not one, is refused.
+        bare["messages"][0]["cc"] = json!(vec![person("", "a@x.org"); MAX_PEOPLE + 1]);
+        assert!(plain(&bare).is_err());
+        bare["messages"][0]["cc"] = json!("a@x.org");
+        assert!(plain(&bare).is_err());
+    }
+
+    #[test]
+    fn a_forward_recipients_line_reads_exactly() {
+        let summary = json!({"forward": true, "messages": [
+            {"name":"Benek Lisefski","email":"hello@benek.nz","date":"2024-06-26T21:45:00Z","body":"Hi Emma,",
+             "to":[person("dma intern", "intern@dma.nz")],
+             "cc":[person("Leighton Hughes", "hello@leightonhughes.co.nz"), person("", "ann&co@x.nz")]},
+            {"name":"dma intern","email":"intern@dma.nz","date":"2024-07-09T22:25:00Z","body":"Also?",
+             "to":[person("Benek Lisefski", "hello@benek.nz")]}
+        ]});
+        let when = |d: &str| when(&json!({ "date": d }));
+        let out = plain(&summary).unwrap();
+        assert_eq!(
+            out,
+            format!(
+                "> dma intern <mailto:intern@dma.nz>\n> {}\n> to Benek Lisefski\n> Also?\n>\n>\n\
+                 > Benek Lisefski <mailto:hello@benek.nz>\n> {}\n> to dma intern; cc Leighton Hughes, ann&co@x.nz\n> Hi Emma,",
+                when("2024-07-09T22:25:00Z"),
+                when("2024-06-26T21:45:00Z")
+            )
+        );
+        let html = html_body(&json!({"body": out, "summary": summary}), false).unwrap().unwrap();
+        assert!(html.contains(&format!(
+            "<span style=\"padding-left:6px\">{}</span></font></div><div style=\"color:#909AA4;font-size:12px;line-height:16px;margin-top:2px;\">\
+             <span style=\"color:#485664;\">to</span> dma intern &nbsp;<span style=\"color:#485664;\">cc</span> Leighton Hughes, ann&amp;co@x.nz</div></div></div>\n\
+             <div class=\"__pbConvBody\" style=\"color:#909AA4;margin-left:24px;margin-right:24px;\">Hi Emma,</div>",
+            when("2024-06-26T21:45:00Z")
+        )));
+        assert!(html.contains(
+            "<div style=\"color:#909AA4;font-size:12px;line-height:16px;margin-top:2px;\"><span style=\"color:#485664;\">to</span> Benek Lisefski</div></div></div>"
+        ));
     }
 
     #[test]

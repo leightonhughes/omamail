@@ -1681,7 +1681,7 @@
       }
     },
     {
-      "name": "Summarize forward quotes each message as a reply does",
+      "name": "Summarize forward names who each message went to where it changes",
       "method": "message.composeText",
       "params": {
         "summarize": {
@@ -1694,19 +1694,57 @@
               "date": "",
               "when": "Jan 15, 2010 09:18",
               "body": "Maple?",
-              "subject": "Trees",
               "to": [
                 {
                   "name": "Ben",
                   "email": "ben@example.org"
                 }
+              ],
+              "cc": [
+                {
+                  "name": "",
+                  "email": "amy@example.org"
+                }
               ]
+            },
+            {
+              "name": "Ben",
+              "email": "ben@example.org",
+              "date": "",
+              "when": "Jan 15, 2010 09:20",
+              "body": "Birch?",
+              "to": [
+                {
+                  "name": "Ben",
+                  "email": "BEN@example.org"
+                }
+              ],
+              "cc": [
+                {
+                  "name": "",
+                  "email": "AMY@example.org"
+                }
+              ]
+            },
+            {
+              "name": "Kate Smith",
+              "email": "kate@example.org",
+              "date": "",
+              "when": "Jan 15, 2010 09:22",
+              "body": "Oak.",
+              "to": [
+                {
+                  "name": "Ben",
+                  "email": "ben@example.org"
+                }
+              ],
+              "cc": []
             }
           ]
         }
       },
       "equals": {
-        "quote": "> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:18\n> Maple?"
+        "quote": "> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:22\n> to Ben\n> Oak.\n>\n>\n> Ben <mailto:ben@example.org>\n> Jan 15, 2010 09:20\n> Birch?\n>\n>\n> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:18\n> to Ben; cc amy@example.org\n> Maple?"
       }
     },
     {
@@ -1732,7 +1770,7 @@
       }
     },
     {
-      "name": "recovery refuses a Summarize forward flag that is not a boolean",
+      "name": "recovery refuses a Summarize forward To that is not a list",
       "method": "compose.recoverySave",
       "params": {
         "expectedRevision": "unused",
@@ -1742,7 +1780,7 @@
           "draft": {
             "body": "Fwd",
             "placedSource": {
-              "forward": "yes",
+              "forward": true,
               "newestFirst": true,
               "messages": [
                 {
@@ -1750,7 +1788,8 @@
                   "email": "k@example.org",
                   "date": "",
                   "when": "",
-                  "body": "Maple?"
+                  "body": "Maple?",
+                  "to": "ben@example.org"
                 }
               ]
             }
@@ -1779,8 +1818,8 @@
       "Summarize quotes each message once, newest first",
       "Summarize compose accepts the placed summary",
       "recovery refuses a malformed Summarize source",
-      "Summarize forward quotes each message as a reply does",
-      "recovery refuses a Summarize forward flag that is not a boolean"
+      "Summarize forward names who each message went to where it changes",
+      "recovery refuses a Summarize forward To that is not a list"
     ]
   }
 }
