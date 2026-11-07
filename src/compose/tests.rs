@@ -96,6 +96,59 @@ fn summarize_source_survives_recovery_within_its_limits() {
     assert_eq!(call_at(&temp.0, "compose.recoveryRead", &json!({})).unwrap(), answer);
 }
 #[test]
+fn forward_summarize_source_keeps_its_headers_within_limits() {
+    let temp = Temp::new();
+    let person = |email: &str| json!({"name":"", "email":email, "extra":"dropped"});
+    let message = json!({"name":"Kate","email":"k@example.org","date":"2010-01-14T22:20:00Z","when":"Jan 15",
+        "body":"Maple?","subject":"Trees","to":[person("b@example.org")],"cc":[]});
+    let mut value = saved("Fwd");
+    value["draft"]["placedSource"] =
+        json!({"messages":[message.clone()],"newestFirst":true,"forward":true});
+    let answer = call_at(
+        &temp.0,
+        "compose.recoverySave",
+        &json!({"record":value, "expectedRevision":revision(&[])}),
+    )
+    .unwrap();
+    let kept = &answer["record"]["draft"]["placedSource"];
+    assert_eq!(kept["forward"], true);
+    assert_eq!(kept["messages"][0]["subject"], "Trees");
+    assert_eq!(
+        kept["messages"][0]["to"],
+        json!([{"name":"","email":"b@example.org"}])
+    );
+    assert_eq!(kept["messages"][0]["cc"], json!([]));
+    let with = |key: &str, field: Value| {
+        let mut m = message.clone();
+        m[key] = field;
+        json!({"messages":[m],"newestFirst":true,"forward":true})
+    };
+    let mut not_a_flag = with("subject", json!("Trees"));
+    not_a_flag["forward"] = json!("yes");
+    for (bad, error) in [
+        (not_a_flag, "recovery_invalid"),
+        (with("subject", json!(7)), "recovery_invalid"),
+        (with("subject", json!("x".repeat(4097))), "recovery_too_large"),
+        (with("to", json!("b@example.org")), "recovery_invalid"),
+        (with("to", json!([{"name":"B"}])), "recovery_invalid"),
+        (with("cc", json!(vec![person("c@example.org"); 101])), "recovery_too_large"),
+        (with("cc", json!([{"name":"", "email":"x".repeat(4097)}])), "recovery_too_large"),
+    ] {
+        let mut value = saved("Fwd");
+        value["draft"]["placedSource"] = bad;
+        let refused = call_at(
+            &temp.0,
+            "compose.recoverySave",
+            &json!({"record":value, "expectedRevision":answer["revision"]}),
+        );
+        assert_eq!(refused.unwrap_err(), error);
+    }
+    assert_eq!(
+        call_at(&temp.0, "compose.recoveryRead", &json!({})).unwrap(),
+        answer
+    );
+}
+#[test]
 fn reply_quote_survives_active_and_parked_durable_recovery() {
     let temp = Temp::new();
     let quote = "On Monday, 合成 wrote:\r\n> \"quoted\" \\ text\n";

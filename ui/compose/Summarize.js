@@ -4,7 +4,20 @@
 // stripped from each message, belong to src/message/summarize.rs; this only
 // gathers what the backend is given.
 
-// One message of a Summarize reply, from its summary and its readable text.
+// A forward's To or CC line, as summarize.rs takes it: at most 100 addresses
+// (MAX_PEOPLE there), the first ones kept.
+function people(list) {
+  var out = []
+  var all = Array.isArray(list) ? list : []
+  for (var i = 0; i < all.length && out.length < 100; i++) {
+    var person = all[i] || ({})
+    out.push({ name: String(person.name || ""), email: String(person.email || "") })
+  }
+  return out
+}
+
+// One message of a Summarize reply or forward, from its summary and its
+// readable text. A forward heads each message with its To, CC and Subject too.
 function entry(summary, text) {
   var message = summary || ({})
   var from = message.from || ({})
@@ -18,14 +31,17 @@ function entry(summary, text) {
     email: String(from.email || ""),
     date: at > 0 ? new Date(at).toISOString() : "",
     when: String(message.fullTime || ""),
-    body: String(text || "")
+    body: String(text || ""),
+    to: people(message.to),
+    cc: people(message.cc),
+    subject: String(message.subject || "")
   }
 }
 
 // What `message.composeText` and `message.compose` take as `summarize` /
 // `summary`, or null when there is nothing to summarize. A message read twice
-// counts once.
-function source(entries, newestFirst) {
+// counts once. A forward's source says so, for its labelled headers.
+function source(entries, newestFirst, forward) {
   var list = []
   var seen = ({})
   var all = entries || []
@@ -37,7 +53,10 @@ function source(entries, newestFirst) {
     seen[key] = true
     list.push(item)
   }
-  return list.length > 0 ? ({ messages: list, newestFirst: newestFirst !== false }) : null
+  if (list.length === 0) return null
+  var out = { messages: list, newestFirst: newestFirst !== false }
+  if (forward === true) out.forward = true
+  return out
 }
 
 // The other members of the conversation to read: the last `limit`, without

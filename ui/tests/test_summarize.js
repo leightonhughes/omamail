@@ -6,7 +6,16 @@ const summarize = load("compose/Summarize.js")
 const kate = { from: { name: "Kate Smith", email: "kate@x.org", display: "Kate Smith" },
   date: "2010-01-14T22:20:00.000Z", fullTime: "Jan 15, 2010 09:20" }
 deepEqual(summarize.entry(kate, "Maple?"),
-  { name: "Kate Smith", email: "kate@x.org", date: "2010-01-14T22:20:00.000Z", when: "Jan 15, 2010 09:20", body: "Maple?" })
+  { name: "Kate Smith", email: "kate@x.org", date: "2010-01-14T22:20:00.000Z", when: "Jan 15, 2010 09:20", body: "Maple?",
+    to: [], cc: [], subject: "" })
+// A forward's headers: each message's own To, CC and subject, Re: and all.
+const sent = summarize.entry({ subject: "Re: Trees", to: [{ name: "Ben", email: "b@x.org", display: "Ben" }],
+  cc: [{ email: "c@x.org" }] }, "")
+deepEqual([sent.subject, sent.to, sent.cc], ["Re: Trees", [{ name: "Ben", email: "b@x.org" }], [{ name: "", email: "c@x.org" }]])
+const crowd = []
+for (let i = 0; i < 130; i++) crowd.push({ email: "p" + i + "@x.org" })
+assert.strictEqual(summarize.entry({ cc: crowd }, "").cc.length, 100)
+assert.strictEqual(summarize.entry({ cc: crowd }, "").cc[99].email, "p99@x.org")
 // The reader's summaries carry a Date (and dateMs), not the wire string.
 assert.strictEqual(summarize.entry({ date: new Date("2026-11-06T04:47:51Z") }, "").date, "2026-11-06T04:47:51.000Z")
 assert.strictEqual(summarize.entry({ dateMs: 1263507600000, date: new Date(0) }, "").date, "2010-01-14T22:20:00.000Z")
@@ -21,6 +30,9 @@ const out = summarize.source([once, ben, summarize.entry(kate, "Maple?")])
 assert.strictEqual(out.messages.length, 2)
 assert.strictEqual(out.newestFirst, true)
 assert.strictEqual(summarize.source([ben], false).newestFirst, false)
+// Only a forward's source is marked as one.
+assert.strictEqual(summarize.source([ben], true, true).forward, true)
+assert.strictEqual("forward" in summarize.source([ben]), false)
 assert.strictEqual(summarize.source([]), null)
 
 // The open message is not read again, and long threads keep their end.

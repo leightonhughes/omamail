@@ -339,7 +339,7 @@ DropArea {
   property string replyText: ""
   property int summarizeSerial: 0
   readonly property bool canSummarize: !!service && service.backendCanSummarizeReplies === true
-    && (mode === "reply" || mode === "replyAll") && !!replySummary
+    && (mode === "reply" || mode === "replyAll" || mode === "forward") && !!replySummary
 
   // Placed at once from the message being answered, then again with the rest
   // of the conversation once it has been read, unless the body was edited.
@@ -348,7 +348,9 @@ DropArea {
     summarizeSource = null
     if (!canSummarize || !summarizeReplies) return
     var open = Summarize.entry(replySummary, replyText)
-    summarizeSource = Summarize.source([open])
+    // A forward heads each message with From, Date, To, CC and Subject.
+    var forwarding = mode === "forward"
+    summarizeSource = Summarize.source([open], true, forwarding)
     var reading = service.reading
     var projection = service.conversationProjection || ({})
     if (!reading || typeof reading.preparedRead !== "function") return
@@ -357,7 +359,7 @@ DropArea {
       if (serial !== root.summarizeSerial || ids.length === 0) return
       root.threadMessages(reading, ids, function(entries) {
         if (serial !== root.summarizeSerial || !root.opened) return
-        root.summarizeSource = Summarize.source([open].concat(entries))
+        root.summarizeSource = Summarize.source([open].concat(entries), true, forwarding)
         root.requote()
       })
     }
@@ -1055,7 +1057,7 @@ DropArea {
       threadId: root.mode === "forward" ? "" : root.threadId,
       inReplyTo: root.mode === "forward" ? "" : root.inReplyTo,
       // The HTML part draws cards only while the summary is unedited.
-      summary: root.mode === "forward" ? null : root.placedSource
+      summary: root.placedSource
     }))
     if (accepted) parkForSend(accepted === true ? "" : String(accepted))
   }
@@ -1455,8 +1457,10 @@ DropArea {
           visible: root.canSummarize
           text: root.summarizeSource ? "Summarize" : "Quote"
           tooltipText: root.bodyWasEdited
-            ? "Quote or Summarize is chosen before the reply is edited"
-            : (root.summarizeSource ? "Quote only the message being answered" : "Quote each message of the conversation once")
+            ? "Quote or Summarize is chosen before the message is edited"
+            : (root.summarizeSource
+              ? (root.mode === "forward" ? "Quote only the message being forwarded" : "Quote only the message being answered")
+              : "Quote each message of the conversation once")
           foreground: root.bodyWasEdited ? root.dimColor : root.textColor
           bordered: false
           fontSize: Style.font.caption

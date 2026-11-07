@@ -34,6 +34,7 @@ Item {
       if (mailService.holdNativeText) mailService.pendingNativeText.push({callback:callback,result:result})
       else callback(result, null)
     }})
+    property bool backendCanSummarizeReplies: false
     property bool sendPending: false
     property bool sending: false
     property int sendSecondsRemaining: 10
@@ -112,6 +113,7 @@ Item {
 
     function init() {
       mailService.composeAccountId = adaId
+      mailService.backendCanSummarizeReplies = false
       mailService.senderSources = []
       mailService.sendIdentities = []
       compose.reset()
@@ -344,6 +346,45 @@ Item {
       verify(mailService.submitted, "the draft was submitted")
       compare(String(mailService.submitted.accountId), bobId,
         "and it names B, which is the only thing that can route it")
+    }
+
+    // A forward summarizes like a reply, with each message's own headers, and
+    // sends the source it placed; only a backend that offers it shows the toggle.
+    function test_a_forward_can_summarize_and_sends_what_it_placed() {
+      var toggle = named(compose, "compose-summarize-toggle")
+      compose.begin("forward", incoming(), "Original body", [])
+      compare(toggle.visible, false, "a backend without Summarize hides the toggle")
+      compare(compose.summarizeSource, null)
+
+      mailService.backendCanSummarizeReplies = true
+      compose.summarizeReplies = true
+      mailService.submitted = null
+      compose.begin("forward", incoming(), "Original body", [])
+      compare(toggle.visible, true)
+      compare(compose.summarizeSource.forward, true)
+      var entry = compose.summarizeSource.messages[0]
+      compare(entry.subject, "Invoice")
+      compare(entry.to.length, 2)
+      compare(entry.to[0].email, bobId)
+      compare(entry.body, "Original body")
+      var placed = compose.placedSource
+      compare(placed, compose.summarizeSource, "the placed body came from it")
+      compose.submit()
+      verify(mailService.submitted, "the forward was submitted")
+      compare(mailService.submitted.summary, placed)
+      compare(mailService.submitted.inReplyTo, "", "a forward still starts a new conversation")
+
+      // Quote leaves the forward as plain text.
+      compose.begin("forward", incoming(), "Original body", [])
+      compose.setSummarize(false)
+      compare(compose.summarizeSource, null)
+      compose.submit()
+      compare(mailService.submitted.summary, null)
+
+      // A reply's source is not a forward's.
+      compose.summarizeReplies = true
+      compose.begin("reply", incoming(), "Original body", [])
+      compare(compose.summarizeSource.forward, undefined)
     }
 
     function test_reply_all_from_the_active_mailbox_is_unchanged() {

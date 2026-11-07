@@ -1681,6 +1681,41 @@
       }
     },
     {
+      "name": "Summarize forward heads each message with labelled lines",
+      "method": "message.composeText",
+      "params": {
+        "summarize": {
+          "forward": true,
+          "newestFirst": true,
+          "messages": [
+            {
+              "name": "Kate Smith",
+              "email": "kate@example.org",
+              "date": "",
+              "when": "Jan 15, 2010 09:18",
+              "body": "Maple?",
+              "to": [
+                {
+                  "name": "Ben",
+                  "email": "ben@example.org"
+                }
+              ],
+              "cc": [
+                {
+                  "name": "",
+                  "email": "amy@example.org"
+                }
+              ],
+              "subject": "Trees"
+            }
+          ]
+        }
+      },
+      "equals": {
+        "quote": "> *From:* Kate Smith <kate@example.org>\n> *Date:* Jan 15, 2010 09:18\n> *To:* Ben <ben@example.org>\n> *CC:* amy@example.org\n> *Subject:* Trees\n> Maple?"
+      }
+    },
+    {
       "name": "recovery refuses a malformed Summarize source",
       "method": "compose.recoverySave",
       "params": {
@@ -1693,6 +1728,38 @@
             "placedSource": {
               "messages": "not a list",
               "newestFirst": true
+            }
+          }
+        }
+      },
+      "errorCode": -32000,
+      "equals": {
+        "message": "recovery_invalid"
+      }
+    },
+    {
+      "name": "recovery refuses a Summarize forward header that is not a list",
+      "method": "compose.recoverySave",
+      "params": {
+        "expectedRevision": "unused",
+        "record": {
+          "version": 1,
+          "active": true,
+          "draft": {
+            "body": "Fwd",
+            "placedSource": {
+              "forward": true,
+              "newestFirst": true,
+              "messages": [
+                {
+                  "name": "Kate",
+                  "email": "k@example.org",
+                  "date": "",
+                  "when": "",
+                  "body": "Maple?",
+                  "to": "ben@example.org"
+                }
+              ]
             }
           }
         }
@@ -1718,7 +1785,9 @@
       "Gmail thread lookup requires a thread id",
       "Summarize quotes each message once, newest first",
       "Summarize compose accepts the placed summary",
-      "recovery refuses a malformed Summarize source"
+      "recovery refuses a malformed Summarize source",
+      "Summarize forward heads each message with labelled lines",
+      "recovery refuses a Summarize forward header that is not a list"
     ]
   }
 }
