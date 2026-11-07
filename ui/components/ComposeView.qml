@@ -348,7 +348,7 @@ DropArea {
     summarizeSource = null
     if (!canSummarize || !summarizeReplies) return
     var open = Summarize.entry(replySummary, replyText)
-    // A forward heads each message with From, Date, To, CC and Subject.
+    // A forward's cards are a reply's; only its blockquote is marked as one.
     var forwarding = mode === "forward"
     summarizeSource = Summarize.source([open], true, forwarding)
     var reading = service.reading

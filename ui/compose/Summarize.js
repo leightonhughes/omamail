@@ -4,20 +4,8 @@
 // stripped from each message, belong to src/message/summarize.rs; this only
 // gathers what the backend is given.
 
-// A forward's To or CC line, as summarize.rs takes it: at most 100 addresses
-// (MAX_PEOPLE there), the first ones kept.
-function people(list) {
-  var out = []
-  var all = Array.isArray(list) ? list : []
-  for (var i = 0; i < all.length && out.length < 100; i++) {
-    var person = all[i] || ({})
-    out.push({ name: String(person.name || ""), email: String(person.email || "") })
-  }
-  return out
-}
-
 // One message of a Summarize reply or forward, from its summary and its
-// readable text. A forward heads each message with its To, CC and Subject too.
+// readable text.
 function entry(summary, text) {
   var message = summary || ({})
   var from = message.from || ({})
@@ -31,16 +19,13 @@ function entry(summary, text) {
     email: String(from.email || ""),
     date: at > 0 ? new Date(at).toISOString() : "",
     when: String(message.fullTime || ""),
-    body: String(text || ""),
-    to: people(message.to),
-    cc: people(message.cc),
-    subject: String(message.subject || "")
+    body: String(text || "")
   }
 }
 
 // What `message.composeText` and `message.compose` take as `summarize` /
 // `summary`, or null when there is nothing to summarize. A message read twice
-// counts once. A forward's source says so, for its labelled headers.
+// counts once. A forward's source says so, for its blockquote's class.
 function source(entries, newestFirst, forward) {
   var list = []
   var seen = ({})

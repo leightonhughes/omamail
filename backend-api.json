@@ -1681,7 +1681,7 @@
       }
     },
     {
-      "name": "Summarize forward heads each message with labelled lines",
+      "name": "Summarize forward quotes each message as a reply does",
       "method": "message.composeText",
       "params": {
         "summarize": {
@@ -1694,25 +1694,19 @@
               "date": "",
               "when": "Jan 15, 2010 09:18",
               "body": "Maple?",
+              "subject": "Trees",
               "to": [
                 {
                   "name": "Ben",
                   "email": "ben@example.org"
                 }
-              ],
-              "cc": [
-                {
-                  "name": "",
-                  "email": "amy@example.org"
-                }
-              ],
-              "subject": "Trees"
+              ]
             }
           ]
         }
       },
       "equals": {
-        "quote": "> *From:* Kate Smith <kate@example.org>\n> *Date:* Jan 15, 2010 09:18\n> *To:* Ben <ben@example.org>\n> *CC:* amy@example.org\n> *Subject:* Trees\n> Maple?"
+        "quote": "> Kate Smith <mailto:kate@example.org>\n> Jan 15, 2010 09:18\n> Maple?"
       }
     },
     {
@@ -1738,7 +1732,7 @@
       }
     },
     {
-      "name": "recovery refuses a Summarize forward header that is not a list",
+      "name": "recovery refuses a Summarize forward flag that is not a boolean",
       "method": "compose.recoverySave",
       "params": {
         "expectedRevision": "unused",
@@ -1748,7 +1742,7 @@
           "draft": {
             "body": "Fwd",
             "placedSource": {
-              "forward": true,
+              "forward": "yes",
               "newestFirst": true,
               "messages": [
                 {
@@ -1756,8 +1750,7 @@
                   "email": "k@example.org",
                   "date": "",
                   "when": "",
-                  "body": "Maple?",
-                  "to": "ben@example.org"
+                  "body": "Maple?"
                 }
               ]
             }
@@ -1786,8 +1779,8 @@
       "Summarize quotes each message once, newest first",
       "Summarize compose accepts the placed summary",
       "recovery refuses a malformed Summarize source",
-      "Summarize forward heads each message with labelled lines",
-      "recovery refuses a Summarize forward header that is not a list"
+      "Summarize forward quotes each message as a reply does",
+      "recovery refuses a Summarize forward flag that is not a boolean"
     ]
   }
 }

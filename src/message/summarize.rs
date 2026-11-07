@@ -8,9 +8,8 @@
 //! single `<blockquote type="cite">` with its border removed, so clients still
 //! treat the cards as quoted text.
 //!
-//! A forward summarizes the same way, as Postbox's forwards did, but each
-//! message is headed by labelled From, Date, To, CC and Subject lines instead
-//! of a name and a date, and the blockquote carries Postbox's forward class.
+//! A forward summarizes the same way, with the same cards; only its
+//! blockquote carries Postbox's forward class.
 //!
 //! A message keeps what its author wrote. Its quoted history goes, and so does
 //! a signature below a `-- ` line; sign-offs and footers without that line stay,
@@ -23,8 +22,6 @@ type Result<T> = std::result::Result<T, &'static str>;
 /// At most this many messages are summarized, the newest kept.
 pub const MAX_MESSAGES: usize = 5;
 const MAX_BODY: usize = 256 * 1024;
-/// At most this many To or CC addresses per message; the composer trims to it.
-pub const MAX_PEOPLE: usize = 100;
 
 #[derive(Debug, PartialEq)]
 struct Entry {
@@ -32,28 +29,6 @@ struct Entry {
     email: String,
     when: String,
     body: String,
-    to: Vec<(String, String)>,
-    cc: Vec<(String, String)>,
-    subject: String,
-}
-
-/// A forward's To or CC list, `[{name, email}]`; absent is empty.
-fn people(v: &Value) -> Result<Vec<(String, String)>> {
-    let Some(list) = v.as_array() else {
-        return if v.is_null() {
-            Ok(Vec::new())
-        } else {
-            Err("invalid_params")
-        };
-    };
-    if list.len() > MAX_PEOPLE {
-        return Err("invalid_params");
-    }
-    Ok(list
-        .iter()
-        .map(|p| (one_line(text(&p["name"])), one_line(text(&p["email"]))))
-        .filter(|(name, email)| !name.is_empty() || !email.is_empty())
-        .collect())
 }
 
 fn text(v: &Value) -> &str {
@@ -75,8 +50,8 @@ fn one_line(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// `{messages: [{name, email, date, when, body, to, cc, subject}], newestFirst,
-/// forward}`, messages in any order. Answers the newest `MAX_MESSAGES`, stripped, in the order to show.
+/// `{messages: [{name, email, date, when, body}], newestFirst, forward}`,
+/// messages in any order. Answers the newest `MAX_MESSAGES`, stripped, in the order to show.
 fn entries(summary: &Value) -> Result<Vec<Entry>> {
     let list = summary["messages"].as_array().ok_or("invalid_params")?;
     if list.is_empty() || list.len() > 64 {
@@ -107,9 +82,6 @@ fn entries(summary: &Value) -> Result<Vec<Entry>> {
                 email,
                 when: one_line(&when(item)),
                 body: stripped,
-                to: people(&item["to"])?,
-                cc: people(&item["cc"])?,
-                subject: one_line(text(&item["subject"])),
             },
         ));
     }
@@ -214,58 +186,19 @@ pub fn strip(body: &str) -> String {
     out.join("\n")
 }
 
-fn forward(summary: &Value) -> bool {
-    summary["forward"] == true
-}
-
-/// `Name <address>`, or whichever of the two there is.
-fn person(name: &str, email: &str) -> String {
-    if email.is_empty() || name == email {
-        if email.is_empty() {
-            name.to_owned()
-        } else {
-            email.to_owned()
-        }
-    } else if name.is_empty() {
-        email.to_owned()
-    } else {
-        format!("{name} <{email}>")
-    }
-}
-
-fn list(people: &[(String, String)], one: impl Fn(&str, &str) -> String) -> String {
-    people
-        .iter()
-        .map(|(n, e)| one(n, e))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-// Postbox's forward header, labelled and in Markdown-style bold.
-fn forward_header(e: &Entry, lines: &mut Vec<String>) {
-    lines.push(format!("> *From:* {}", person(&e.name, &e.email)));
-    for (label, value) in [
-        ("Date", e.when.clone()),
-        ("To", list(&e.to, person)),
-        ("CC", list(&e.cc, person)),
-        ("Subject", e.subject.clone()),
-    ] {
-        if !value.is_empty() {
-            lines.push(format!("> *{label}:* {value}"));
-        }
-    }
-}
-
-fn plain_entries(entries: &[Entry], forwarding: bool) -> String {
+fn plain_entries(entries: &[Entry]) -> String {
     let mut lines: Vec<String> = Vec::new();
     for (i, e) in entries.iter().enumerate() {
         if i > 0 {
             lines.extend([">".into(), ">".into()]);
         }
-        if forwarding {
-            forward_header(e, &mut lines);
+        lines.push(if e.email.is_empty() {
+            format!("> {}", e.name)
         } else {
-            reply_header(e, &mut lines);
+            format!("> {} <mailto:{}>", e.name, e.email)
+        });
+        if !e.when.is_empty() {
+            lines.push(format!("> {}", e.when));
         }
         for line in e.body.split('\n') {
             lines.push(if line.is_empty() {
@@ -278,20 +211,9 @@ fn plain_entries(entries: &[Entry], forwarding: bool) -> String {
     lines.join("\n")
 }
 
-fn reply_header(e: &Entry, lines: &mut Vec<String>) {
-    lines.push(if e.email.is_empty() {
-        format!("> {}", e.name)
-    } else {
-        format!("> {} <mailto:{}>", e.name, e.email)
-    });
-    if !e.when.is_empty() {
-        lines.push(format!("> {}", e.when));
-    }
-}
-
 /// The plain-text quote for `message.composeText`.
 pub fn plain(summary: &Value) -> Result<String> {
-    Ok(plain_entries(&entries(summary)?, forward(summary)))
+    Ok(plain_entries(&entries(summary)?))
 }
 
 fn escape(value: &str) -> String {
@@ -327,42 +249,6 @@ fn card(e: &Entry) -> String {
     )
 }
 
-fn person_html(name: &str, email: &str) -> String {
-    if email.is_empty() {
-        return escape(name);
-    }
-    let same = name.is_empty() || name == email;
-    let email = escape(email);
-    if same {
-        format!("<a class=\"moz-txt-link-abbreviated\" href=\"mailto:{email}\">{email}</a>")
-    } else {
-        format!(
-            "{} <a class=\"moz-txt-link-rfc2396E\" href=\"mailto:{email}\">&lt;{email}&gt;</a>",
-            escape(name)
-        )
-    }
-}
-
-// Postbox's forward card: the same rule and body, with a labelled header.
-fn forward_card(e: &Entry) -> String {
-    let mut rest = String::new();
-    for (label, value) in [
-        ("Date", escape(&e.when)),
-        ("To", list(&e.to, person_html)),
-        ("CC", list(&e.cc, person_html)),
-        ("Subject", escape(&e.subject)),
-    ] {
-        if !value.is_empty() {
-            rest.push_str(&format!("<b>{label}:</b> {value}<br>"));
-        }
-    }
-    format!(
-        "<div class=\"__pbConvHr\" style=\"margin:30px 25px 10px 25px;\"><div style=\"display:table;width:100%;border-top:2px solid rgba(146,154,163,0.7);padding-top:10px\"><font color=\"#485664\"><div style=\"display:table-cell;white-space:nowrap;vertical-align:top;width:100%\"><span style=\"padding-right:6px;font-weight:500\"><b>From:</b> {}<br></span><font color=\"#485664\">{rest}</font></div></font></div></div>\n<div class=\"__pbConvBody\" style=\"color:#909AA4;margin-left:24px;margin-right:24px;\">{}</div>\n",
-        person_html(&e.name, &e.email),
-        lines_html(&e.body)
-    )
-}
-
 fn cite(in_reply_to: &str) -> String {
     let id = in_reply_to
         .trim()
@@ -384,8 +270,7 @@ pub fn html_body(fields: &Value, rtl: bool) -> Result<Option<String>> {
         return Ok(None);
     }
     let entries = entries(summary)?;
-    let forwarding = forward(summary);
-    let quote = plain_entries(&entries, forwarding);
+    let quote = plain_entries(&entries);
     let body = text(&fields["body"]).replace("\r\n", "\n");
     let Some(at) = body.find(&quote) else {
         return Ok(None);
@@ -393,15 +278,12 @@ pub fn html_body(fields: &Value, rtl: bool) -> Result<Option<String>> {
     let block = format!(
         "<blockquote type=\"cite\"{} style=\"border: 0px none !important;\"{}>\n{}</blockquote>",
         cite(text(&fields["inReplyTo"])),
-        if forwarding {
+        if summary["forward"] == true {
             " class=\"__pbForwardBlockQuote\""
         } else {
             ""
         },
-        entries
-            .iter()
-            .map(if forwarding { forward_card } else { card })
-            .collect::<String>()
+        entries.iter().map(card).collect::<String>()
     );
     let part = |s: &str| {
         let s = s.trim_end_matches('\n');
@@ -546,63 +428,25 @@ mod tests {
         assert!(!String::from_utf8(plain).unwrap().contains("text/html"));
     }
 
-    fn forwarded() -> Value {
-        json!({"forward": true, "messages": [
-            {"name":"dma intern","email":"intern@dma.nz","date":"2024-07-09T22:25:00Z","when":"x",
-             "to":[{"name":"Benek Lisefski","email":"hello@benek.nz"}],"subject":"Website",
-             "body":"Also are we able?\n\nThanks,\nEmma"},
-            {"name":"Benek Lisefski","email":"hello@benek.nz","date":"2024-06-26T21:45:00Z",
-             "to":[{"name":"","email":"intern@dma.nz"}],
-             "cc":[{"name":"Leighton Hughes","email":"hello@leightonhughes.co.nz"},{"name":"Ann & Co","email":"a@x.nz"}],
-             "subject":"Re: Website","body":"Hi Emma,\n-- \nBenek"}
-        ]})
-    }
-
     #[test]
-    fn a_forward_heads_each_message_with_labelled_lines() {
-        let out = plain(&forwarded()).unwrap();
-        let when = |d: &str| when(&json!({ "date": d }));
-        assert_eq!(
-            out,
-            format!(
-                "> *From:* dma intern <intern@dma.nz>\n> *Date:* {}\n> *To:* Benek Lisefski <hello@benek.nz>\n> *Subject:* Website\n> Also are we able?\n>\n> Thanks,\n> Emma\n>\n>\n\
-                 > *From:* Benek Lisefski <hello@benek.nz>\n> *Date:* {}\n> *To:* intern@dma.nz\n> *CC:* Leighton Hughes <hello@leightonhughes.co.nz>, Ann & Co <a@x.nz>\n> *Subject:* Re: Website\n> Hi Emma,",
-                when("2024-07-09T22:25:00Z"),
-                when("2024-06-26T21:45:00Z")
-            )
-        );
-        // The same messages as a reply keep the reply header.
-        let mut reply = forwarded();
-        reply["forward"] = json!(false);
-        assert!(plain(&reply).unwrap().starts_with("> dma intern <mailto:intern@dma.nz>\n"));
-        // Too many addresses, or a list that is not one, is refused.
-        let mut many = forwarded();
-        many["messages"][0]["cc"] = json!(vec![json!({"email":"a@x.nz"}); MAX_PEOPLE + 1]);
-        assert!(plain(&many).is_err());
-        many["messages"][0]["cc"] = json!("a@x.nz");
-        assert!(plain(&many).is_err());
-    }
-
-    #[test]
-    fn a_forward_sends_postbox_forward_cards() {
-        let quote = plain(&forwarded()).unwrap();
-        let fields = json!({"body": format!("Please see this.\n\n{quote}"), "summary": forwarded(), "inReplyTo": ""});
-        let html = html_body(&fields, false).unwrap().unwrap();
-        assert!(html.contains("<blockquote type=\"cite\" style=\"border: 0px none !important;\" class=\"__pbForwardBlockQuote\">"));
-        assert_eq!(html.matches("class=\"__pbConvHr\"").count(), 2);
-        assert!(html.contains("<span style=\"padding-right:6px;font-weight:500\"><b>From:</b> dma intern <a class=\"moz-txt-link-rfc2396E\" href=\"mailto:intern@dma.nz\">&lt;intern@dma.nz&gt;</a><br></span><font color=\"#485664\"><b>Date:</b> "));
-        assert!(html.contains("<b>To:</b> Benek Lisefski <a class=\"moz-txt-link-rfc2396E\" href=\"mailto:hello@benek.nz\">&lt;hello@benek.nz&gt;</a><br><b>Subject:</b> Website<br></font>"));
-        assert!(html.contains("<b>To:</b> <a class=\"moz-txt-link-abbreviated\" href=\"mailto:intern@dma.nz\">intern@dma.nz</a><br><b>CC:</b> Leighton Hughes <a class=\"moz-txt-link-rfc2396E\" href=\"mailto:hello@leightonhughes.co.nz\">&lt;hello@leightonhughes.co.nz&gt;</a>, Ann &amp; Co <a"));
-        // CC appears only where a message had one, and the signature is gone.
-        assert_eq!(html.matches("<b>CC:</b>").count(), 1);
-        assert!(!html.contains("Benek</div>") && html.contains(">Hi Emma,</div>"));
-        // An edited forward goes out as written.
-        let edited = json!({"body": quote.replace("Emma", "Em"), "summary": forwarded()});
-        assert_eq!(html_body(&edited, false).unwrap(), None);
-        // Its attachments still go with it, beside the text and the cards.
+    fn a_forward_quotes_like_a_reply_in_a_forward_blockquote() {
         use base64::Engine;
-        let sent = crate::message::compose::build(&json!({"to":"l@x.nz","subject":"Fwd: Website",
-            "body":fields["body"],"summary":forwarded(),"boundary":"b",
+        let mut forward = thread();
+        forward["forward"] = json!(true);
+        let quote = plain(&forward).unwrap();
+        assert_eq!(quote, plain(&thread()).unwrap());
+        let fields = json!({"body": format!("Please see this.\n\n{quote}"), "summary": forward, "inReplyTo": ""});
+        let html = html_body(&fields, false).unwrap().unwrap();
+        assert!(html.contains(
+            "<blockquote type=\"cite\" style=\"border: 0px none !important;\" class=\"__pbForwardBlockQuote\">"
+        ));
+        let reply = json!({"body": fields["body"], "summary": thread(), "inReplyTo": ""});
+        let reply = html_body(&reply, false).unwrap().unwrap();
+        assert!(!reply.contains("__pbForwardBlockQuote"));
+        assert_eq!(html.replace(" class=\"__pbForwardBlockQuote\"", ""), reply);
+        // Its attachments still go with it, beside the text and the cards.
+        let sent = crate::message::compose::build(&json!({"to":"l@x.nz","subject":"Fwd: Trees",
+            "body":fields["body"],"summary":fields["summary"],"boundary":"b",
             "attachments":[{"filename":"plan.pdf","mimeType":"application/pdf","data":"AP_-AQ"}]}))
         .unwrap();
         let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -610,7 +454,7 @@ mod tests {
             .unwrap();
         let raw = String::from_utf8(raw).unwrap();
         assert!(raw.contains("multipart/mixed") && raw.contains("multipart/alternative"));
-        assert!(raw.contains("Content-Type: text/html") && raw.contains("Content-Disposition: attachment; filename=") && raw.contains("plan.pdf"));
+        assert!(raw.contains("Content-Type: text/html") && raw.contains("plan.pdf"));
         assert!(!raw.contains("In-Reply-To"));
     }
 

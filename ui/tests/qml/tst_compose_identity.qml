@@ -348,8 +348,8 @@ Item {
         "and it names B, which is the only thing that can route it")
     }
 
-    // A forward summarizes like a reply, with each message's own headers, and
-    // sends the source it placed; only a backend that offers it shows the toggle.
+    // A forward summarizes like a reply and sends the source it placed; only a
+    // backend that offers it shows the toggle.
     function test_a_forward_can_summarize_and_sends_what_it_placed() {
       var toggle = named(compose, "compose-summarize-toggle")
       compose.begin("forward", incoming(), "Original body", [])
@@ -363,10 +363,9 @@ Item {
       compare(toggle.visible, true)
       compare(compose.summarizeSource.forward, true)
       var entry = compose.summarizeSource.messages[0]
-      compare(entry.subject, "Invoice")
-      compare(entry.to.length, 2)
-      compare(entry.to[0].email, bobId)
+      compare(entry.email, "sender@example.com")
       compare(entry.body, "Original body")
+      compare(entry.to, undefined, "a forward's cards carry no To, CC or Subject")
       var placed = compose.placedSource
       compare(placed, compose.summarizeSource, "the placed body came from it")
       compose.submit()

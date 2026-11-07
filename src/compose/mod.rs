@@ -45,8 +45,8 @@ fn empty() -> Value {
 // The Summarize source a reply's or forward's quote was placed from, so a
 // recovered draft still sends its cards. App-owned metadata: only the fields
 // summarize.rs reads are kept, as strings, within its own limits; anything
-// else refuses the record. A forward's To, CC and Subject are optional, so a
-// reply source saved before them still recovers.
+// else refuses the record. Other fields are dropped, such as the To, CC and
+// Subject that forward sources briefly carried.
 fn placed_source(value: &Value) -> Result<Value> {
     let list = value["messages"].as_array().ok_or("recovery_invalid")?;
     if list.is_empty() || list.len() > 64 || !value["newestFirst"].is_boolean() {
@@ -55,41 +55,15 @@ fn placed_source(value: &Value) -> Result<Value> {
     if value.get("forward").is_some_and(|f| !f.is_boolean()) {
         return Err("recovery_invalid");
     }
-    let string = |v: &Value, limit: usize| -> Result<Value> {
-        let field = v.as_str().ok_or("recovery_invalid")?;
-        if field.len() > limit {
-            return Err("recovery_too_large");
-        }
-        Ok(json!(field))
-    };
     let mut messages = Vec::new();
     for item in list {
         let mut entry = json!({});
-        for (key, limit) in [
-            ("name", 4096),
-            ("email", 4096),
-            ("date", 64),
-            ("when", 256),
-            ("body", 256 * 1024),
-        ] {
-            entry[key] = string(&item[key], limit)?;
-        }
-        if let Some(subject) = item.get("subject") {
-            entry["subject"] = string(subject, 4096)?;
-        }
-        for key in ["to", "cc"] {
-            let Some(people) = item.get(key) else {
-                continue;
-            };
-            let people = people.as_array().ok_or("recovery_invalid")?;
-            if people.len() > crate::message::summarize::MAX_PEOPLE {
+        for (key, limit) in [("name", 4096), ("email", 4096), ("date", 64), ("when", 256), ("body", 256 * 1024)] {
+            let field = item[key].as_str().ok_or("recovery_invalid")?;
+            if field.len() > limit {
                 return Err("recovery_too_large");
             }
-            let mut kept = Vec::new();
-            for person in people {
-                kept.push(json!({"name":string(&person["name"], 4096)?,"email":string(&person["email"], 4096)?}));
-            }
-            entry[key] = json!(kept);
+            entry[key] = json!(field);
         }
         messages.push(entry);
     }
